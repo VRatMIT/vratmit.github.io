@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MBTA Train Tracker</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            background-color: transparent;
+        }
+        
+        .train-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background-color: #f5f5f5;
+        }
+        
+        .map-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background-color: white;
+        }
+        
+        .subway-map {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background-image: url('mbta-map.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+        
+        .train {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 1s ease;
+            z-index: 2;
+            box-shadow: 0 0 4px rgba(0,0,0,0.5);
+        }
+        
+        .status-bar {
+            padding: 5px;
+            background-color: #333;
+            color: white;
+            font-size: 12px;
+            text-align: center;
+        }
+        
+        .last-updated {
+            font-size: 10px;
+            color: #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div class="train-container">
+        <div class="map-container">
+            <div class="subway-map" id="subway-map">
+                <!-- Train dots will be added here dynamically -->
+            </div>
+        </div>
+        <div class="status-bar">
+            <span id="status">Loading train data...</span>
+            <span class="last-updated" id="last-updated"></span>
+        </div>
+    </div>
+
+    <script>
+        // MBTA API configuration
+        const API_URL = 'https://api-v3.mbta.com';
+        const API_KEY = ''; // Add your API key here if needed
+        
+        // Create log container to help debug
+        const debug = {
+            log: function(message, data) {
+                console.log(`MBTA Train: ${message}`, data || '');
+            },
+            error: function(message, error) {
+                console.error(`MBTA Train Error: ${message}`, error || '');
+            }
+        };
+        
+        // Line colors
+        const lineColors = {
+            'Red': '#DA291C',
+            'Orange': '#ED8B00',
+            'Blue': '#003DA5',
+            'Green': '#00843D'
+        };
+        
+        // DOM elements
+        const subwayMap = document.getElementById('subway-map');
+        const statusElement = document.getElementById('status');
+        const lastUpdatedElement = document.getElementById('last-updated');
+        
+        // Train data
+        let trains = {};
+        
+        // Update train positions
+        function updateTrainPositions() {
+            // Clear existing trains
+            document.querySelectorAll('.train').forEach(train => train.remove());
+            
+            // Add updated train positions
+            Object.values(trains).forEach(train => {
+                const trainElement = document.createElement('div');
+                trainElement.className = 'train';
+                trainElement.style.backgroundColor = lineColors[train.line];
+                trainElement.style.left = `${train.x * 100}%`;
+                trainElement.style.top = `${train.y * 100}%`;
+                subwayMap.appendChild(trainElement);
+            });
+        }
+        
+        // Fetch train data from MBTA API
+        async function fetchTrainData() {
+            try {
+                let url = `${API_URL}/vehicles?filter[route_type]=0,1&include=trip,route`;
+                if (API_KEY) {
+                    url += `&api_key=${API_KEY}`;
+                }
+                
+                debug.log('Fetching train data from:', url);
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`API returned status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                debug.log('Train data received', {
+                    count: data.data?.length || 0,
+                    firstFew: data.data?.slice(0, 3)
+                });
+                
+                // Process train data
+                trains = {};
+                data.data.forEach(vehicle => {
+                    const routeId = vehicle.relationships.route.data.id;
+                    const line = routeId.split('-')[0].charAt(0).toUpperCase() + routeId.split('-')[0].slice(1);
+                    
+                    if (lineColors[line]) {
+                        // Use the actual latitude and longitude to position the train
+                        // We'll need to convert these to relative positions on the image
+                        const x = convertLongitudeToX(vehicle.attributes.longitude);
+                        const y = convertLatitudeToY(vehicle.attributes.latitude);
+                        
+                        trains[vehicle.id] = {
+                            line: line,
+                            x: x,
+                            y: y
+                        };
+                    }
+                });
+                
+                updateTrainPositions();
+                lastUpdatedElement.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+                statusElement.textContent = 'Trains updated successfully';
+            } catch (error) {
+                debug.error('Error fetching train data:', error);
+                statusElement.textContent = 'Error updating train data';
+            }
+        }
+        
+        // Convert longitude to x position (0-1)
+        function convertLongitudeToX(longitude) {
+            // MBTA map bounds (approximate)
+            const minLon = -71.2;  // Western edge
+            const maxLon = -70.9;  // Eastern edge
+            return (longitude - minLon) / (maxLon - minLon);
+        }
+        
+        // Convert latitude to y position (0-1)
+        function convertLatitudeToY(latitude) {
+            // MBTA map bounds (approximate)
+            const minLat = 42.2;   // Southern edge
+            const maxLat = 42.5;   // Northern edge
+            return 1 - (latitude - minLat) / (maxLat - minLat); // Invert Y axis
+        }
+        
+        // Initialize and start updates
+        fetchTrainData();
+        setInterval(fetchTrainData, 30000);
+    </script>
+</body>
+</html> 
