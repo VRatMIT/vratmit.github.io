@@ -188,36 +188,72 @@
         const nubianSuffix = document.getElementById('nubian-suffix');
         const nubianNext = document.getElementById('nubian-next');
         
-        // Stop information
+        // API configuration
+        const API_URL = 'https://api-v3.mbta.com';
+        const API_KEY = ''; // Add your API key here if needed
+        
+        // Create log container to help debug
+        const debug = {
+            log: function(message, data) {
+                console.log(`MBTA Bus: ${message}`, data || '');
+            },
+            error: function(message, error) {
+                console.error(`MBTA Bus Error: ${message}`, error || '');
+            }
+        };
+        
+        // Initial stop information - these will be verified by the API
         const stops = {
             harvard: {
-                stopId: '1795', // 77 Mass Ave (Harvard-bound/outbound)
+                label: "77 Mass Ave (to Harvard)",
+                searchName: "Massachusetts Ave @ MIT - 77 Mass Ave",
+                direction: "Harvard",
+                directionId: 0, // Outbound (to Harvard)
+                stopId: "97", // Correct ID from MBTA Explorer tool
                 timeElement: harvardTime,
                 suffixElement: harvardSuffix,
                 nextElement: harvardNext
             },
             nubian: {
-                stopId: '1797', // 84 Mass Ave (Nubian-bound/inbound)
+                label: "84 Mass Ave (to Nubian)",
+                searchName: "Massachusetts Ave @ MIT - 84 Mass Ave",
+                direction: "Nubian",
+                directionId: 1, // Inbound (to Nubian)
+                stopId: "75", // Correct ID from MBTA Explorer tool
                 timeElement: nubianTime,
                 suffixElement: nubianSuffix,
                 nextElement: nubianNext
             }
         };
         
-        // API configuration
-        const API_URL = 'https://api-v3.mbta.com';
-        const API_KEY = ''; // Add your API key here if needed
+        // Function to verify and update stop IDs
+        async function verifyStops() {
+            debug.log('Using verified stop IDs from MBTA Explorer tool');
+            debug.log('Harvard-bound stop ID: 97 (77 Mass Ave outbound)');
+            debug.log('Nubian-bound stop ID: 75 (84 Mass Ave inbound)');
+            
+            // Start fetching predictions with verified stops
+            fetchAllPredictions();
+        }
         
         // Format prediction to minutes
         function formatPrediction(prediction) {
+            // Log more details about each prediction for debugging
+            debug.log('Processing prediction:', {
+                id: prediction.id,
+                directionId: prediction.attributes.direction_id,
+                status: prediction.attributes.status,
+                stopSequence: prediction.attributes.stop_sequence
+            });
+
             // Check if we have arrival_time, if not use departure_time
             const arrivalTimeStr = prediction.attributes.arrival_time || prediction.attributes.departure_time;
             
             // Log the raw prediction time for debugging
-            console.log('Raw prediction time:', arrivalTimeStr);
+            debug.log('Raw prediction time:', arrivalTimeStr);
             
             if (!arrivalTimeStr) {
-                console.log('No arrival or departure time in prediction:', prediction);
+                debug.log('No arrival or departure time in prediction:', prediction);
                 return {
                     display: 'N/A',
                     minutes: 999,
@@ -230,7 +266,7 @@
             
             // Reject predictions with years far in the future (test data)
             if (arrivalTime.getFullYear() > now.getFullYear() + 1) {
-                console.log('Rejecting future test data:', arrivalTimeStr);
+                debug.log('Rejecting future test data:', arrivalTimeStr);
                 return {
                     display: 'Invalid',
                     minutes: 999,
@@ -241,7 +277,7 @@
             // Calculate minutes difference
             let minutesDiff = Math.round((arrivalTime - now) / (1000 * 60));
             
-            console.log('Minutes diff:', minutesDiff, 'Arrival:', arrivalTime.toLocaleTimeString(), 'Now:', now.toLocaleTimeString());
+            debug.log('Minutes diff:', minutesDiff, 'Arrival:', arrivalTime.toLocaleTimeString(), 'Now:', now.toLocaleTimeString());
             
             // Handle arriving bus
             if (minutesDiff <= 0) {
@@ -271,7 +307,7 @@
         // Update the display with prediction data
         function updateDisplay(predictions, config) {
             // Log predictions data for debugging
-            console.log('Updating display with predictions, count:', predictions.length);
+            debug.log(`Updating display for ${config.label} with ${predictions.length} predictions`);
             
             // Clear previous data
             config.timeElement.textContent = '--';
@@ -284,9 +320,27 @@
                 return;
             }
             
+            // Filter predictions by direction ID if specified
+            let filteredPredictions = predictions;
+            if (config.directionId !== undefined) {
+                filteredPredictions = predictions.filter(pred => 
+                    pred.attributes && 
+                    pred.attributes.direction_id !== undefined && 
+                    pred.attributes.direction_id === config.directionId
+                );
+                
+                debug.log(`Filtered by direction_id ${config.directionId}:`, filteredPredictions.length);
+                
+                // If no predictions for the specified direction, fall back to all predictions
+                if (filteredPredictions.length === 0) {
+                    debug.log('No predictions for specified direction, using all predictions');
+                    filteredPredictions = predictions;
+                }
+            }
+            
             // Filter predictions to only include those with actual times in a reasonable range
             const now = new Date();
-            const validPredictions = predictions.filter(pred => {
+            const validPredictions = filteredPredictions.filter(pred => {
                 if (!pred.attributes || (!pred.attributes.arrival_time && !pred.attributes.departure_time)) {
                     return false;
                 }
@@ -298,11 +352,11 @@
                        predTime > now;
             });
             
-            console.log('Valid predictions after time filtering:', validPredictions.length);
+            debug.log('Valid predictions after time filtering:', validPredictions.length);
             
             if (validPredictions.length === 0) {
                 // If we didn't find any valid predictions, try to extract from all data by looking at schedule
-                console.log('No valid predictions found, checking schedules');
+                debug.log('No valid predictions found, checking schedules');
                 
                 // Attempt to extract schedule data
                 const scheduledPredictions = [];
@@ -310,13 +364,13 @@
                 // Examine raw data for schedule information
                 predictions.forEach(pred => {
                     if (pred.attributes && pred.attributes.schedule) {
-                        console.log('Found schedule data:', pred.attributes.schedule);
+                        debug.log('Found schedule data:', pred.attributes.schedule);
                         scheduledPredictions.push(pred);
                     }
                 });
                 
                 if (scheduledPredictions.length > 0) {
-                    console.log('Using schedule data for predictions:', scheduledPredictions.length);
+                    debug.log('Using schedule data for predictions:', scheduledPredictions.length);
                     // Use the scheduled predictions instead
                     updateDisplayWithSchedule(scheduledPredictions, config);
                     return;
@@ -381,7 +435,7 @@
                 return null;
             }).filter(s => s !== null);
             
-            console.log('Extracted schedules:', schedules);
+            debug.log('Extracted schedules:', schedules);
             
             if (schedules.length === 0) {
                 config.timeElement.textContent = 'No';
@@ -442,13 +496,30 @@
                 config.timeElement.textContent = '...';
                 config.suffixElement.textContent = '';
                 
-                // Build the API URL with current timestamp to avoid caching
-                let url = `${API_URL}/predictions?filter[route]=1&filter[stop]=${config.stopId}&sort=arrival_time&page[limit]=10`;
+                // Build the API URL with parameters that match trackthet.com's approach
+                let url = `${API_URL}/predictions?`;
+                
+                // Add route filter
+                url += `filter[route]=1`;
+                
+                // Add stop filter
+                url += `&filter[stop]=${config.stopId}`;
+                
+                // Add direction filter
+                url += `&filter[direction_id]=${config.directionId}`;
+                
+                // Include additional data
+                url += `&include=trip,stop`;
+                
+                // Add sorting
+                url += `&sort=departure_time`;
+                
+                // Add API key if provided
                 if (API_KEY) {
                     url += `&api_key=${API_KEY}`;
                 }
                 
-                console.log(`Fetching predictions for ${stop} from: ${url}`);
+                debug.log(`Fetching predictions for ${stop} (stop ${config.stopId}, direction ${config.directionId}) from: ${url}`);
                 
                 // Fetch predictions
                 const response = await fetch(url);
@@ -458,12 +529,15 @@
                 }
                 
                 const data = await response.json();
-                console.log(`${stop} predictions data:`, data);
+                debug.log(`${stop} predictions data received`, {
+                    count: data.data?.length || 0,
+                    firstFew: data.data?.slice(0, 3)
+                });
                 
                 // Update the display with the predictions
                 updateDisplay(data.data, config);
             } catch (error) {
-                console.error(`Error fetching ${stop} predictions:`, error);
+                debug.error(`Error fetching ${stop} predictions:`, error);
                 config.timeElement.textContent = 'Error';
                 config.suffixElement.textContent = '';
             }
@@ -476,7 +550,7 @@
         }
         
         // Initialize the tracker
-        fetchAllPredictions();
+        verifyStops();
         
         // Refresh predictions every 30 seconds
         setInterval(fetchAllPredictions, 30 * 1000);

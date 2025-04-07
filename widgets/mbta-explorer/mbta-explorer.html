@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MBTA Stop Explorer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        
+        h1, h2, h3 {
+            color: #0056b3;
+            margin-bottom: 15px;
+        }
+        
+        select, button {
+            padding: 8px 12px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #fff;
+            font-size: 16px;
+        }
+        
+        button {
+            background-color: #0056b3;
+            color: white;
+            cursor: pointer;
+            border: none;
+        }
+        
+        button:hover {
+            background-color: #003d7a;
+        }
+        
+        .controls {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .control-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        
+        .control-label {
+            font-weight: bold;
+            min-width: 80px;
+        }
+        
+        #stops-container {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .stop-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .stop-item {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .stop-item:hover {
+            background-color: #e6f7ff;
+        }
+        
+        .stop-details {
+            margin-top: 10px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #fff;
+            white-space: pre-wrap;
+        }
+        
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+        
+        .error {
+            color: #d9534f;
+            background-color: #f8d7da;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        
+        .highlight {
+            background-color: #ffdb4d;
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+        
+        .card {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .direction-label {
+            display: inline-block;
+            padding: 3px 6px;
+            margin-right: 5px;
+            border-radius: 3px;
+            font-size: 14px;
+        }
+        
+        .direction-0 {
+            background-color: #e6f7ff;
+            color: #0056b3;
+        }
+        
+        .direction-1 {
+            background-color: #fff1e6;
+            color: #d46b08;
+        }
+        
+        .stop-name {
+            font-weight: bold;
+        }
+        
+        .metadata {
+            font-family: monospace;
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            overflow: auto;
+        }
+        
+        #search-input {
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+            flex-grow: 1;
+            min-width: 200px;
+        }
+        
+        .copy-button {
+            font-size: 14px;
+            background-color: #28a745;
+            padding: 3px 8px;
+        }
+        
+        .stop-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+        
+        .wheelchair-accessible {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .not-accessible {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>MBTA Stop Explorer</h1>
+    <p>Use this tool to find stop IDs and metadata for the MBTA bus tracker.</p>
+    
+    <div class="controls card">
+        <div class="control-row">
+            <span class="control-label">Route:</span>
+            <select id="route-select">
+                <option value="">Select a route</option>
+                <!-- Routes will be populated here -->
+            </select>
+            <button id="load-routes-btn">Load Routes</button>
+        </div>
+        
+        <div class="control-row">
+            <span class="control-label">Direction:</span>
+            <select id="direction-select" disabled>
+                <option value="">Select a direction</option>
+                <option value="0">Outbound (0)</option>
+                <option value="1">Inbound (1)</option>
+            </select>
+        </div>
+        
+        <div class="control-row">
+            <span class="control-label">Search:</span>
+            <input type="text" id="search-input" placeholder="Search stops by name (e.g. Mass Ave or MIT)" disabled>
+        </div>
+    </div>
+    
+    <div id="stops-container" class="card">
+        <h2>Stops</h2>
+        <div id="stops-loading" class="loading">Select a route and direction to view stops.</div>
+        <div id="stops-list" class="stop-list"></div>
+    </div>
+    
+    <div id="stop-details-container" class="card" style="display: none;">
+        <h2>Stop Details</h2>
+        <div id="stop-detail-content"></div>
+    </div>
+    
+    <div id="test-predictions-container" class="card" style="display: none;">
+        <h2>Test Predictions</h2>
+        <div id="predictions-loading" class="loading">Loading predictions...</div>
+        <div id="predictions-content"></div>
+    </div>
+    
+    <script>
+        // API configuration
+        const API_URL = 'https://api-v3.mbta.com';
+        
+        // DOM elements
+        const routeSelect = document.getElementById('route-select');
+        const directionSelect = document.getElementById('direction-select');
+        const searchInput = document.getElementById('search-input');
+        const loadRoutesBtn = document.getElementById('load-routes-btn');
+        const stopsLoading = document.getElementById('stops-loading');
+        const stopsList = document.getElementById('stops-list');
+        const stopDetailsContainer = document.getElementById('stop-details-container');
+        const stopDetailContent = document.getElementById('stop-detail-content');
+        const testPredictionsContainer = document.getElementById('test-predictions-container');
+        const predictionsLoading = document.getElementById('predictions-loading');
+        const predictionsContent = document.getElementById('predictions-content');
+        
+        // Helper functions
+        function showError(message, container) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            container.appendChild(errorDiv);
+        }
+        
+        function clearContainer(container) {
+            container.innerHTML = '';
+        }
+        
+        // Fetch routes
+        async function fetchRoutes() {
+            try {
+                clearContainer(routeSelect);
+                
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = 'Loading routes...';
+                routeSelect.appendChild(defaultOption);
+                
+                loadRoutesBtn.disabled = true;
+                loadRoutesBtn.textContent = 'Loading...';
+                
+                const url = `${API_URL}/routes?filter[type]=3`;
+                console.log(`Fetching routes from: ${url}`);
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`API returned status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Routes data:', data);
+                
+                // Clear and populate route select
+                clearContainer(routeSelect);
+                
+                const defaultOption2 = document.createElement('option');
+                defaultOption2.value = '';
+                defaultOption2.textContent = 'Select a route';
+                routeSelect.appendChild(defaultOption2);
+                
+                // Sort routes numerically/alphabetically
+                data.data.sort((a, b) => {
+                    const aNum = parseInt(a.attributes.short_name);
+                    const bNum = parseInt(b.attributes.short_name);
+                    
+                    if (!isNaN(aNum) && !isNaN(bNum)) {
+                        return aNum - bNum;
+                    }
+                    
+                    return a.attributes.short_name.localeCompare(b.attributes.short_name);
+                });
+                
+                data.data.forEach(route => {
+                    const option = document.createElement('option');
+                    option.value = route.id;
+                    option.textContent = `${route.attributes.short_name} - ${route.attributes.long_name}`;
+                    routeSelect.appendChild(option);
+                });
+                
+            } catch (error) {
+                console.error('Error fetching routes:', error);
+                showError(`Failed to load routes: ${error.message}`, stopsList);
+            } finally {
+                loadRoutesBtn.disabled = false;
+                loadRoutesBtn.textContent = 'Load Routes';
+            }
+        }
+        
+        // Fetch stops for a route
+        async function fetchStops(routeId, directionId) {
+            try {
+                clearContainer(stopsList);
+                stopsLoading.style.display = 'block';
+                stopsLoading.textContent = 'Loading stops...';
+                
+                let url = `${API_URL}/stops?filter[route]=${routeId}`;
+                
+                if (directionId !== '') {
+                    url += `&filter[direction_id]=${directionId}`;
+                }
+                
+                console.log(`Fetching stops from: ${url}`);
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`API returned status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Stops data:', data);
+                
+                stopsLoading.style.display = 'none';
+                
+                if (data.data.length === 0) {
+                    stopsLoading.style.display = 'block';
+                    stopsLoading.textContent = 'No stops found for this route and direction.';
+                    return;
+                }
+                
+                // Enable search input
+                searchInput.disabled = false;
+                
+                // Sort stops by name
+                data.data.sort((a, b) => {
+                    return a.attributes.name.localeCompare(b.attributes.name);
+                });
+                
+                // Render stops
+                renderStops(data.data);
+                
+                // Setup search functionality
+                setupSearch(data.data);
+                
+            } catch (error) {
+                console.error('Error fetching stops:', error);
+                stopsLoading.style.display = 'none';
+                showError(`Failed to load stops: ${error.message}`, stopsList);
+            }
+        }
+        
+        // Render stops list
+        function renderStops(stops) {
+            clearContainer(stopsList);
+            
+            stops.forEach(stop => {
+                const stopItem = document.createElement('div');
+                stopItem.className = 'stop-item';
+                stopItem.dataset.stopId = stop.id;
+                
+                // Direction badge
+                let directionBadge = '';
+                if (stop.attributes.direction_id !== undefined) {
+                    const directionText = stop.attributes.direction_id === 0 ? 'Outbound' : 'Inbound';
+                    directionBadge = `<span class="direction-label direction-${stop.attributes.direction_id}">${directionText} (${stop.attributes.direction_id})</span>`;
+                }
+                
+                // Wheelchair badge
+                let wheelchairBadge = '';
+                if (stop.attributes.wheelchair_boarding === 1) {
+                    wheelchairBadge = `<span class="status-badge wheelchair-accessible">♿ Accessible</span>`;
+                } else if (stop.attributes.wheelchair_boarding === 2) {
+                    wheelchairBadge = `<span class="status-badge not-accessible">⚠️ Not Accessible</span>`;
+                }
+                
+                stopItem.innerHTML = `
+                    <div class="stop-name">${stop.attributes.name}</div>
+                    <div>ID: <span class="highlight">${stop.id}</span> ${directionBadge} ${wheelchairBadge}</div>
+                `;
+                
+                stopItem.addEventListener('click', () => {
+                    displayStopDetails(stop);
+                });
+                
+                stopsList.appendChild(stopItem);
+            });
+        }
+        
+        // Display stop details
+        function displayStopDetails(stop) {
+            stopDetailsContainer.style.display = 'block';
+            clearContainer(stopDetailContent);
+            
+            const directionText = stop.attributes.direction_id === 0 ? 'Outbound' : 'Inbound';
+            const wheelchairText = stop.attributes.wheelchair_boarding === 1 ? 'Accessible' : 
+                                   stop.attributes.wheelchair_boarding === 2 ? 'Not Accessible' : 'Unknown';
+            
+            // Create details card
+            const detailsHtml = `
+                <div class="stop-details">
+                    <h3>${stop.attributes.name}</h3>
+                    <p><strong>Stop ID:</strong> <span class="highlight">${stop.id}</span></p>
+                    <p><strong>Direction:</strong> ${directionText} (${stop.attributes.direction_id})</p>
+                    <p><strong>Wheelchair Boarding:</strong> ${wheelchairText}</p>
+                    <p><strong>Address:</strong> ${stop.attributes.address || 'N/A'}</p>
+                    <p><strong>Description:</strong> ${stop.attributes.description || 'N/A'}</p>
+                    ${stop.attributes.platform_code ? `<p><strong>Platform Code:</strong> ${stop.attributes.platform_code}</p>` : ''}
+                    ${stop.attributes.platform_name ? `<p><strong>Platform Name:</strong> ${stop.attributes.platform_name}</p>` : ''}
+                    <p><strong>Location:</strong> Latitude ${stop.attributes.latitude}, Longitude ${stop.attributes.longitude}</p>
+                    
+                    <div class="metadata">
+                        <strong>Full Metadata:</strong>
+                        <pre>${JSON.stringify(stop, null, 2)}</pre>
+                    </div>
+                    
+                    <div class="stop-actions">
+                        <button class="copy-button" data-value="${stop.id}">Copy Stop ID</button>
+                        <button class="test-predictions-button" data-stop-id="${stop.id}" data-direction-id="${stop.attributes.direction_id}">Test Predictions</button>
+                    </div>
+                </div>
+            `;
+            
+            stopDetailContent.innerHTML = detailsHtml;
+            
+            // Setup copy button
+            const copyButton = stopDetailContent.querySelector('.copy-button');
+            copyButton.addEventListener('click', (e) => {
+                const textToCopy = e.target.dataset.value;
+                navigator.clipboard.writeText(textToCopy)
+                    .then(() => {
+                        const originalText = e.target.textContent;
+                        e.target.textContent = 'Copied!';
+                        setTimeout(() => {
+                            e.target.textContent = originalText;
+                        }, 1500);
+                    })
+                    .catch(err => {
+                        console.error('Failed to copy text:', err);
+                    });
+            });
+            
+            // Setup test predictions button
+            const testPredictionsButton = stopDetailContent.querySelector('.test-predictions-button');
+            testPredictionsButton.addEventListener('click', (e) => {
+                const stopId = e.target.dataset.stopId;
+                const directionId = e.target.dataset.directionId;
+                const routeId = routeSelect.value;
+                
+                testPredictionsContainer.style.display = 'block';
+                testPredictions(routeId, stopId, directionId);
+            });
+        }
+        
+        // Test predictions for a stop
+        async function testPredictions(routeId, stopId, directionId) {
+            try {
+                clearContainer(predictionsContent);
+                predictionsLoading.style.display = 'block';
+                
+                let url = `${API_URL}/predictions?filter[route]=${routeId}&filter[stop]=${stopId}`;
+                
+                if (directionId !== undefined && directionId !== null && directionId !== '') {
+                    url += `&filter[direction_id]=${directionId}`;
+                }
+                
+                url += '&include=trip,stop&sort=departure_time';
+                
+                console.log(`Fetching predictions from: ${url}`);
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`API returned status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Predictions data:', data);
+                
+                predictionsLoading.style.display = 'none';
+                
+                // Display predictions
+                if (data.data.length === 0) {
+                    predictionsContent.innerHTML = '<div class="error">No predictions found for this stop.</div>';
+                    return;
+                }
+                
+                // Create prediction results table
+                let predictionsHtml = `
+                    <p>Found ${data.data.length} predictions for stop ID ${stopId}</p>
+                    <p>API URL: <a href="${url}" target="_blank">${url}</a></p>
+                    <table border="1" cellpadding="8" style="border-collapse: collapse; width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Status</th>
+                                <th>Direction</th>
+                                <th>Trip</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                data.data.forEach(prediction => {
+                    const now = new Date();
+                    const arrivalTime = prediction.attributes.arrival_time ? new Date(prediction.attributes.arrival_time) : null;
+                    const departureTime = prediction.attributes.departure_time ? new Date(prediction.attributes.departure_time) : null;
+                    
+                    // Calculate minutes until arrival/departure
+                    let timeDisplay = 'N/A';
+                    let minutesDiff = 0;
+                    
+                    if (arrivalTime) {
+                        minutesDiff = Math.round((arrivalTime - now) / (1000 * 60));
+                        timeDisplay = `${minutesDiff} mins (${arrivalTime.toLocaleTimeString()})`;
+                    } else if (departureTime) {
+                        minutesDiff = Math.round((departureTime - now) / (1000 * 60));
+                        timeDisplay = `${minutesDiff} mins (${departureTime.toLocaleTimeString()})`;
+                    }
+                    
+                    const directionText = prediction.attributes.direction_id === 0 ? 'Outbound' : 'Inbound';
+                    
+                    predictionsHtml += `
+                        <tr>
+                            <td>${timeDisplay}</td>
+                            <td>${prediction.attributes.status || 'N/A'}</td>
+                            <td>${directionText} (${prediction.attributes.direction_id})</td>
+                            <td>${prediction.relationships.trip?.data?.id || 'N/A'}</td>
+                            <td>
+                                <details>
+                                    <summary>View metadata</summary>
+                                    <pre style="max-height: 200px; overflow: auto;">${JSON.stringify(prediction, null, 2)}</pre>
+                                </details>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                predictionsHtml += `
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 10px;">
+                        <p><strong>MBTA Bus HTML for this stop:</strong></p>
+                        <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 4px; overflow: auto;">
+stopId: "${stopId}", // ${data.included?.find(item => item.type === 'stop')?.attributes.name || 'Stop name not found'}
+directionId: ${directionId}, // ${directionId === '0' ? 'Outbound' : 'Inbound'}</pre>
+                        <button class="copy-button" data-value="stopId: &quot;${stopId}&quot;, // ${data.included?.find(item => item.type === 'stop')?.attributes.name || 'Stop name not found'}
+directionId: ${directionId}, // ${directionId === '0' ? 'Outbound' : 'Inbound'}">Copy Configuration</button>
+                    </div>
+                `;
+                
+                predictionsContent.innerHTML = predictionsHtml;
+                
+                // Setup copy button for configuration
+                const copyConfigButton = predictionsContent.querySelector('.copy-button');
+                copyConfigButton.addEventListener('click', (e) => {
+                    const textToCopy = e.target.dataset.value;
+                    navigator.clipboard.writeText(textToCopy)
+                        .then(() => {
+                            const originalText = e.target.textContent;
+                            e.target.textContent = 'Copied!';
+                            setTimeout(() => {
+                                e.target.textContent = originalText;
+                            }, 1500);
+                        })
+                        .catch(err => {
+                            console.error('Failed to copy text:', err);
+                        });
+                });
+                
+            } catch (error) {
+                console.error('Error fetching predictions:', error);
+                predictionsLoading.style.display = 'none';
+                predictionsContent.innerHTML = `<div class="error">Failed to load predictions: ${error.message}</div>`;
+            }
+        }
+        
+        // Setup search functionality
+        function setupSearch(stops) {
+            searchInput.addEventListener('input', (e) => {
+                const searchTerm = e.target.value.toLowerCase().trim();
+                
+                if (searchTerm === '') {
+                    // Show all stops
+                    renderStops(stops);
+                    return;
+                }
+                
+                // Filter stops based on search term
+                const filteredStops = stops.filter(stop => {
+                    return stop.attributes.name.toLowerCase().includes(searchTerm) || 
+                           stop.id.includes(searchTerm);
+                });
+                
+                renderStops(filteredStops);
+            });
+        }
+        
+        // Event listeners
+        loadRoutesBtn.addEventListener('click', fetchRoutes);
+        
+        routeSelect.addEventListener('change', () => {
+            const routeId = routeSelect.value;
+            
+            if (!routeId) {
+                directionSelect.disabled = true;
+                searchInput.disabled = true;
+                clearContainer(stopsList);
+                stopsLoading.textContent = 'Select a route to view stops.';
+                stopsLoading.style.display = 'block';
+                return;
+            }
+            
+            directionSelect.disabled = false;
+            directionSelect.selectedIndex = 0;
+            searchInput.disabled = true;
+            searchInput.value = '';
+            
+            // Hide details and predictions
+            stopDetailsContainer.style.display = 'none';
+            testPredictionsContainer.style.display = 'none';
+            
+            // Fetch stops for the selected route (both directions initially)
+            fetchStops(routeId, '');
+        });
+        
+        directionSelect.addEventListener('change', () => {
+            const routeId = routeSelect.value;
+            const directionId = directionSelect.value;
+            
+            if (!routeId) return;
+            
+            // Hide details and predictions
+            stopDetailsContainer.style.display = 'none';
+            testPredictionsContainer.style.display = 'none';
+            
+            // Fetch stops for the selected route and direction
+            fetchStops(routeId, directionId);
+        });
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', fetchRoutes);
+    </script>
+</body>
+</html> 
