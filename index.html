@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grid Dashboard with Non-Overlapping Panels</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        
+        .dashboard-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            background-color: #f0f0f0;
+            display: grid;
+            gap: 4px;
+            padding: 4px;
+        }
+        
+        .panel {
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .panel-header {
+            padding: 10px;
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+            user-select: none;
+            z-index: 5;
+        }
+        
+        .panel-content {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .panel-content iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        .close-button {
+            cursor: pointer;
+            color: #555;
+            transition: color 0.2s;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .close-button:hover {
+            color: #f44336;
+        }
+        
+        .resize-handle {
+            position: absolute;
+            background-color: transparent;
+            z-index: 10;
+        }
+        
+        .resize-handle.n {
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            cursor: ns-resize;
+        }
+        
+        .resize-handle.s {
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            cursor: ns-resize;
+        }
+        
+        .resize-handle.e {
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 5px;
+            cursor: ew-resize;
+        }
+        
+        .resize-handle.w {
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 5px;
+            cursor: ew-resize;
+        }
+        
+        .dragging {
+            opacity: 0.8;
+        }
+        
+        .resizing {
+            opacity: 0.8;
+        }
+        
+        .placeholder {
+            background-color: rgba(0, 120, 215, 0.2);
+            border: 2px dashed #0078D7;
+        }
+        
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: grid;
+            pointer-events: none;
+            z-index: 100;
+            gap: 4px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .grid-overlay.visible {
+            opacity: 0.2;
+        }
+        
+        .grid-cell {
+            background-color: #0078D7;
+            border: 1px solid white;
+            pointer-events: none;
+        }
+        
+        .grid-cell.highlight {
+            background-color: #00BC56;
+            opacity: 0.5;
+        }
+        
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            transition: transform 0.3s;
+        }
+        
+        .controls.collapsed {
+            transform: translateY(calc(100% - 40px));
+        }
+        
+        .controls-toggle {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 30px;
+            height: 15px;
+            background-color: white;
+            border-radius: 5px 5px 0 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .controls input, .controls select, .controls button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .controls button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .controls button:hover {
+            background-color: #3e8e41;
+        }
+        
+        .add-panel-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            z-index: 1001;
+            width: 400px;
+            max-width: 90%;
+            display: none;
+        }
+        
+        .add-panel-modal.visible {
+            display: block;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .modal-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .drag-handle {
+            position: absolute;
+            background-color: transparent;
+            z-index: 500;
+        }
+        
+        .drag-handle.horizontal {
+            height: 16px;
+            cursor: ns-resize;
+            left: 0;
+            right: 0;
+        }
+        
+        .drag-handle.vertical {
+            width: 16px;
+            cursor: ew-resize;
+            top: 0;
+            bottom: 0;
+        }
+        
+        .drag-handle:hover {
+            background-color: rgba(0, 120, 215, 0.5);
+        }
+        
+        .drag-handle.active {
+            background-color: rgba(0, 120, 215, 0.8);
+        }
+        
+        /* Drag ghost image (hidden) */
+        .drag-ghost {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            opacity: 0.01;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container" id="dashboard">
+        <!-- Panels will be added here dynamically -->
+        
+        <!-- Grid overlay for visualizing the grid -->
+        <div class="grid-overlay" id="grid-overlay">
+            <!-- Grid cells will be added dynamically -->
+        </div>
+    </div>
+    
+    <!-- Controls -->
+    <div class="controls" id="controls">
+        <div class="controls-toggle" id="controls-toggle">▲</div>
+        <button id="add-panel-btn">Add Panel</button>
+        <select id="template-selector">
+            <option value="">Quick Add</option>
+            <option value="https://www.google.com">Google</option>
+            <option value="https://www.openweathermap.org/widgets">Weather</option>
+            <option value="https://www.timeanddate.com/worldclock/widget.html">Clock</option>
+            <option value="https://www.bbc.com">News</option>
+            <option value="https://calendar.google.com/calendar/embed">Calendar</option>
+        </select>
+        <select id="grid-shape-selector">
+            <option value="2x2">2x2 Grid</option>
+            <option value="2x3">2x3 Grid</option>
+            <option value="3x2">3x2 Grid</option>
+            <option value="3x3">3x3 Grid</option>
+            <option value="4x2">4x2 Grid</option>
+            <option value="4x3">4x3 Grid</option>
+            <option value="3x4">3x4 Grid</option>
+            <option value="4x4">4x4 Grid</option>
+        </select>
+    </div>
+    
+    <!-- Add Panel Modal -->
+    <div class="add-panel-modal" id="add-panel-modal">
+        <div class="modal-header">
+            <h3>Add New Panel</h3>
+            <span class="close-button" id="modal-close">✕</span>
+        </div>
+        <div class="modal-form">
+            <input type="text" id="panel-url" placeholder="Enter website URL (e.g., https://example.com)" value="https://example.com">
+            <input type="text" id="panel-title" placeholder="Title (optional)">
+            <button id="add-panel-confirm">Add Panel</button>
+        </div>
+    </div>
+
+    <script>
+        // Dashboard state
+        const state = {
+            panels: [],
+            grid: {
+                rows: 2,
+                cols: 2,
+                cells: [], // Will hold our grid cell states
+                expansionPreference: 'columns' // Whether to expand rows or columns first
+            },
+            nextPanelId: 1,
+            draggingPanel: null,
+            initialCell: null,
+            dragOverCell: null,
+            resizingPanel: null,
+            resizeDirection: '',
+            resizeStartCell: null,
+            resizeEndCell: null,
+            activeDragHandle: null,
+            dragHandleStartPos: null,
+            dragHandleStartPercentage: null
+        };
+        
+        // DOM references
+        const dashboardEl = document.getElementById('dashboard');
+        const gridOverlayEl = document.getElementById('grid-overlay');
+        const controlsEl = document.getElementById('controls');
+        const controlsToggleEl = document.getElementById('controls-toggle');
+        const addPanelBtnEl = document.getElementById('add-panel-btn');
+        const templateSelectorEl = document.getElementById('template-selector');
+        const gridShapeSelectorEl = document.getElementById('grid-shape-selector');
+        const addPanelModalEl = document.getElementById('add-panel-modal');
+        const modalCloseEl = document.getElementById('modal-close');
+        const panelUrlEl = document.getElementById('panel-url');
+        const panelTitleEl = document.getElementById('panel-title');
+        const addPanelConfirmEl = document.getElementById('add-panel-confirm');
+        
+        // Initialize the grid
+        function initializeGrid(rows, cols) {
+            state.grid.rows = rows;
+            state.grid.cols = cols;
+            
+            // Initialize grid cells (each cell has an x, y coordinate and occupancy state)
+            state.grid.cells = [];
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < cols; x++) {
+                    state.grid.cells.push({
+                        x,
+                        y,
+                        occupied: false,
+                        panelId: null
+                    });
+                }
+            }
+            
+            // Update dashboard grid layout
+            dashboardEl.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+            dashboardEl.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+            
+            // Update grid overlay
+            updateGridOverlay();
+        }
+        
+        // Update grid overlay visualization
+        function updateGridOverlay() {
+            gridOverlayEl.style.gridTemplateColumns = `repeat(${state.grid.cols}, 1fr)`;
+            gridOverlayEl.style.gridTemplateRows = `repeat(${state.grid.rows}, 1fr)`;
+            
+            // Clear existing cells
+            gridOverlayEl.innerHTML = '';
+            
+            // Add cells
+            state.grid.cells.forEach(cell => {
+                const cellEl = document.createElement('div');
+                cellEl.className = 'grid-cell';
+                cellEl.dataset.x = cell.x;
+                cellEl.dataset.y = cell.y;
+                
+                if (cell.occupied) {
+                    cellEl.style.opacity = '0.5';
+                }
+                
+                gridOverlayEl.appendChild(cellEl);
+            });
+        }
+        
+        // Find an empty cell
+        function findEmptyCell() {
+            return state.grid.cells.find(cell => !cell.occupied);
+        }
+        
+        // Check if a cell at x,y is empty
+        function isCellEmpty(x, y) {
+            const cell = state.grid.cells.find(cell => cell.x === x && cell.y === y);
+            return cell && !cell.occupied;
+        }
+        
+        // Get cell at x,y coordinates
+        function getCell(x, y) {
+            return state.grid.cells.find(cell => cell.x === x && cell.y === y);
+        }
+        
+        // Find cell from DOM event
+        function getCellFromEvent(e) {
+            const rect = dashboardEl.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) / (rect.width / state.grid.cols));
+            const y = Math.floor((e.clientY - rect.top) / (rect.height / state.grid.rows));
+            
+            return getCell(
+                Math.max(0, Math.min(x, state.grid.cols - 1)),
+                Math.max(0, Math.min(y, state.grid.rows - 1))
+            );
+        }
+        
+        // Expand grid if necessary
+        function expandGridIfNeeded() {
+            const emptyCell = findEmptyCell();
+            
+            if (!emptyCell) {
+                // Decide whether to expand rows or columns based on current state
+                if (state.grid.expansionPreference === 'columns' && state.grid.cols < 3) {
+                    // Expand columns first (2x2 -> 2x3)
+                    const newCols = state.grid.cols + 1;
+                    
+                    // Save current occupied cells
+                    const occupiedCells = state.grid.cells.filter(cell => cell.occupied);
+                    
+                    // Reinitialize with wider grid
+                    initializeGrid(state.grid.rows, newCols);
+                    
+                    // Restore occupied cells
+                    occupiedCells.forEach(oldCell => {
+                        const newCell = getCell(oldCell.x, oldCell.y);
+                        if (newCell) {
+                            newCell.occupied = true;
+                            newCell.panelId = oldCell.panelId;
+                        }
+                    });
+                    
+                    // Change expansion preference for next time
+                    if (state.grid.cols >= 3) {
+                        state.grid.expansionPreference = 'rows';
+                    }
+                } else {
+                    // Expand rows (2x3 -> 3x3 or 3x2 -> 3x3)
+                    const newRows = state.grid.rows + 1;
+                    
+                    // Save current occupied cells
+                    const occupiedCells = state.grid.cells.filter(cell => cell.occupied);
+                    
+                    // Reinitialize with taller grid
+                    initializeGrid(newRows, state.grid.cols);
+                    
+                    // Restore occupied cells
+                    occupiedCells.forEach(oldCell => {
+                        const newCell = getCell(oldCell.x, oldCell.y);
+                        if (newCell) {
+                            newCell.occupied = true;
+                            newCell.panelId = oldCell.panelId;
+                        }
+                    });
+                    
+                    // Toggle expansion preference
+                    if (state.grid.rows >= 3) {
+                        state.grid.expansionPreference = 'columns';
+                    }
+                }
+                
+                // Reposition all panels based on grid
+                state.panels.forEach(panel => repositionPanel(panel));
+                
+                // Update grid handles
+                createDragHandles();
+                
+                return true;
+            }
+            
+            return false;
+        }
+        
+        // Add a new panel
+        function addPanel(url, title, targetCell = null) {
+            // If no target cell provided, find an empty one or expand grid
+            if (!targetCell) {
+                targetCell = findEmptyCell();
+                if (!targetCell) {
+                    expandGridIfNeeded();
+                    targetCell = findEmptyCell();
+                }
+            }
+            
+            if (!targetCell || targetCell.occupied) {
+                console.error('No empty cell available for new panel');
+                return null;
+            }
+            
+            const panelId = `panel-${state.nextPanelId++}`;
+            
+            // Create panel element
+            const panelEl = document.createElement('div');
+            panelEl.className = 'panel';
+            panelEl.id = panelId;
+            panelEl.style.gridColumn = `${targetCell.x + 1}`;
+            panelEl.style.gridRow = `${targetCell.y + 1}`;
+            
+            // Create panel content
+            panelEl.innerHTML = `
+                <div class="panel-header">
+                    <span>${title || `Panel ${panelId.split('-')[1]}`}</span>
+                    <span class="close-button">✕</span>
+                </div>
+                <div class="panel-content">
+                    <iframe src="${url}" title="${title}" allowfullscreen></iframe>
+                </div>
+                <div class="resize-handle n"></div>
+                <div class="resize-handle s"></div>
+                <div class="resize-handle e"></div>
+                <div class="resize-handle w"></div>
+            `;
+            
+            // Add to DOM
+            dashboardEl.appendChild(panelEl);
+            
+            // Mark cell as occupied
+            targetCell.occupied = true;
+            targetCell.panelId = panelId;
+            
+            // Create panel object
+            const panel = {
+                id: panelId,
+                url,
+                title: title || `Panel ${panelId.split('-')[1]}`,
+                element: panelEl,
+                cell: {
+                    x: targetCell.x,
+                    y: targetCell.y
+                }
+            };
+            
+            // Add to panels array
+            state.panels.push(panel);
+            
+            // Setup panel events
+            setupPanelEvents(panel);
+            
+            // Update grid overlay
+            updateGridOverlay();
+            
+            return panel;
+        }
+        
+        // Reposition panel according to grid
+        function repositionPanel(panel) {
+            const cell = state.grid.cells.find(cell => cell.panelId === panel.id);
+            if (cell) {
+                panel.element.style.gridColumn = `${cell.x + 1}`;
+                panel.element.style.gridRow = `${cell.y + 1}`;
+                panel.cell = { x: cell.x, y: cell.y };
+            }
+        }
+        
+        // Setup panel events
+        function setupPanelEvents(panel) {
+            const panelEl = panel.element;
+            const headerEl = panelEl.querySelector('.panel-header');
+            const closeButtonEl = panelEl.querySelector('.close-button');
+            const resizeHandles = panelEl.querySelectorAll('.resize-handle');
+            
+            // Close button handler
+            closeButtonEl.addEventListener('click', () => {
+                removePanel(panel.id);
+            });
+            
+            // Drag handler
+            headerEl.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                
+                state.draggingPanel = panel;
+                state.initialCell = { ...panel.cell };
+                
+                panelEl.classList.add('dragging');
+                
+                // Show grid overlay
+                gridOverlayEl.classList.add('visible');
+                
+                // Add document listeners
+                document.addEventListener('mousemove', handleDragMove);
+                document.addEventListener('mouseup', handleDragEnd);
+            });
+            
+            // Resize handlers
+            resizeHandles.forEach(handle => {
+                handle.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    state.resizingPanel = panel;
+                    state.resizeDirection = handle.classList[1]; // n, s, e, w
+                    state.resizeStartCell = { ...panel.cell };
+                    
+                    panelEl.classList.add('resizing');
+                    
+                    // Show grid overlay
+                    gridOverlayEl.classList.add('visible');
+                    
+                    // Add document listeners
+                    document.addEventListener('mousemove', handleResizeMove);
+                    document.addEventListener('mouseup', handleResizeEnd);
+                });
+            });
+        }
+        
+        // Remove panel
+        function removePanel(panelId) {
+            const panelIndex = state.panels.findIndex(p => p.id === panelId);
+            
+            if (panelIndex !== -1) {
+                const panel = state.panels[panelIndex];
+                
+                // Free up grid cell
+                const cell = state.grid.cells.find(cell => cell.panelId === panelId);
+                if (cell) {
+                    cell.occupied = false;
+                    cell.panelId = null;
+                }
+                
+                // Remove from DOM
+                panel.element.remove();
+                
+                // Remove from panels array
+                state.panels.splice(panelIndex, 1);
+                
+                // Update grid overlay
+                updateGridOverlay();
+            }
+        }
+        
+        // Handle drag move
+        function handleDragMove(e) {
+            if (!state.draggingPanel) return;
+            
+            const currentCell = getCellFromEvent(e);
+            
+            if (currentCell && !state.dragOverCell || 
+                (state.dragOverCell && 
+                 (currentCell.x !== state.dragOverCell.x || 
+                  currentCell.y !== state.dragOverCell.y))) {
+                
+                // Clear previous highlight
+                if (state.dragOverCell) {
+                    const prevCellEl = document.querySelector(`.grid-cell[data-x="${state.dragOverCell.x}"][data-y="${state.dragOverCell.y}"]`);
+                    if (prevCellEl) prevCellEl.classList.remove('highlight');
+                }
+                
+                state.dragOverCell = currentCell;
+                
+                // Highlight current cell if it's empty or it's the original cell
+                if (!currentCell.occupied || 
+                    (currentCell.x === state.initialCell.x && 
+                     currentCell.y === state.initialCell.y)) {
+                    const cellEl = document.querySelector(`.grid-cell[data-x="${currentCell.x}"][data-y="${currentCell.y}"]`);
+                    if (cellEl) cellEl.classList.add('highlight');
+                }
+            }
+        }
+        
+        // Handle drag end
+        function handleDragEnd() {
+            if (!state.draggingPanel) return;
+            
+            const panelEl = state.draggingPanel.element;
+            
+            // If we have a valid target cell
+            if (state.dragOverCell && 
+                (!state.dragOverCell.occupied || 
+                 (state.dragOverCell.x === state.initialCell.x && 
+                  state.dragOverCell.y === state.initialCell.y))) {
+                
+                // Update the original cell
+                const originalCell = getCell(state.initialCell.x, state.initialCell.y);
+                if (originalCell) {
+                    originalCell.occupied = false;
+                    originalCell.panelId = null;
+                }
+                
+                // Update the new cell
+                state.dragOverCell.occupied = true;
+                state.dragOverCell.panelId = state.draggingPanel.id;
+                
+                // Update panel position
+                panelEl.style.gridColumn = `${state.dragOverCell.x + 1}`;
+                panelEl.style.gridRow = `${state.dragOverCell.y + 1}`;
+                
+                // Update panel object
+                state.draggingPanel.cell = {
+                    x: state.dragOverCell.x,
+                    y: state.dragOverCell.y
+                };
+            }
+            
+            // Clean up
+            panelEl.classList.remove('dragging');
+            gridOverlayEl.classList.remove('visible');
+            
+            // Clear drag state
+            state.draggingPanel = null;
+            state.initialCell = null;
+            
+            // Clear any highlighted cells
+            document.querySelectorAll('.grid-cell.highlight').forEach(cell => {
+                cell.classList.remove('highlight');
+            });
+            
+            state.dragOverCell = null;
+            
+            // Remove document listeners
+            document.removeEventListener('mousemove', handleDragMove);
+            document.removeEventListener('mouseup', handleDragEnd);
+            
+            // Update grid overlay
+            updateGridOverlay();
+        }
+        
+        // Handle resize move
+        function handleResizeMove(e) {
+            if (!state.resizingPanel) return;
+            
+            const currentCell = getCellFromEvent(e);
+            
+            if (!currentCell) return;
+            
+            let newX = state.resizeStartCell.x;
+            let newY = state.resizeStartCell.y;
+            
+            // Clear previous highlights
+            document.querySelectorAll('.grid-cell.highlight').forEach(cell => {
+                cell.classList.remove('highlight');
+            });
+            
+            // Handle different resize directions
+            switch (state.resizeDirection) {
+                case 'n':
+                    // Can only resize up
+                    if (currentCell.y < state.resizeStartCell.y) {
+                        newY = currentCell.y;
+                    }
+                    break;
+                case 's':
+                    // Only works if cells below are empty
+                    if (currentCell.y > state.resizeStartCell.y) {
+                        // Check if cells are empty
+                        let canResize = true;
+                        for (let y = state.resizeStartCell.y + 1; y <= currentCell.y; y++) {
+                            if (!isCellEmpty(state.resizeStartCell.x, y)) {
+                                canResize = false;
+                                break;
+                            }
+                        }
+                        
+                        if (canResize) {
+                            // Highlight target cells
+                            for (let y = state.resizeStartCell.y + 1; y <= currentCell.y; y++) {
+                                const cellEl = document.querySelector(`.grid-cell[data-x="${state.resizeStartCell.x}"][data-y="${y}"]`);
+                                if (cellEl) cellEl.classList.add('highlight');
+                            }
+                            
+                            state.resizeEndCell = { x: state.resizeStartCell.x, y: currentCell.y };
+                        }
+                    }
+                    break;
+                case 'e':
+                    // Only works if cells to the right are empty
+                    if (currentCell.x > state.resizeStartCell.x) {
+                        // Check if cells are empty
+                        let canResize = true;
+                        for (let x = state.resizeStartCell.x + 1; x <= currentCell.x; x++) {
+                            if (!isCellEmpty(x, state.resizeStartCell.y)) {
+                                canResize = false;
+                                break;
+                            }
+                        }
+                        
+                        if (canResize) {
+                            // Highlight target cells
+                            for (let x = state.resizeStartCell.x + 1; x <= currentCell.x; x++) {
+                                const cellEl = document.querySelector(`.grid-cell[data-x="${x}"][data-y="${state.resizeStartCell.y}"]`);
+                                if (cellEl) cellEl.classList.add('highlight');
+                            }
+                            
+                            state.resizeEndCell = { x: currentCell.x, y: state.resizeStartCell.y };
+                        }
+                    }
+                    break;
+                case 'w':
+                    // Can only resize left
+                    if (currentCell.x < state.resizeStartCell.x) {
+                        newX = currentCell.x;
+                    }
+                    break;
+            }
+            
+            // Visual preview of resize
+            if (state.resizeDirection === 'n' || state.resizeDirection === 'w') {
+                const width = state.resizeDirection === 'w' ? 
+                    state.resizeStartCell.x - newX + 1 : 1;
+                const height = state.resizeDirection === 'n' ? 
+                    state.resizeStartCell.y - newY + 1 : 1;
+                
+                state.resizingPanel.element.style.gridColumn = `${newX + 1} / span ${width}`;
+                state.resizingPanel.element.style.gridRow = `${newY + 1} / span ${height}`;
+            }
+        }
+        
+        // Handle resize end
+        function handleResizeEnd() {
+            if (!state.resizingPanel) return;
+            
+            const panelEl = state.resizingPanel.element;
+            
+            // Apply resize if we have an end cell (for s and e directions)
+            if (state.resizeEndCell && 
+                (state.resizeDirection === 's' || 
+                 state.resizeDirection === 'e')) {
+                
+                // Mark additional cells as occupied
+                if (state.resizeDirection === 's') {
+                    // Span cells vertically
+                    panelEl.style.gridRow = `${state.resizeStartCell.y + 1} / span ${state.resizeEndCell.y - state.resizeStartCell.y + 1}`;
+                    
+                    // Mark cells as occupied
+                    for (let y = state.resizeStartCell.y + 1; y <= state.resizeEndCell.y; y++) {
+                        const cell = getCell(state.resizeStartCell.x, y);
+                        if (cell) {
+                            cell.occupied = true;
+                            cell.panelId = state.resizingPanel.id;
+                        }
+                    }
+                } else if (state.resizeDirection === 'e') {
+                    // Span cells horizontally
+                    panelEl.style.gridColumn = `${state.resizeStartCell.x + 1} / span ${state.resizeEndCell.x - state.resizeStartCell.x + 1}`;
+                    
+                    // Mark cells as occupied
+                    for (let x = state.resizeStartCell.x + 1; x <= state.resizeEndCell.x; x++) {
+                        const cell = getCell(x, state.resizeStartCell.y);
+                        if (cell) {
+                            cell.occupied = true;
+                            cell.panelId = state.resizingPanel.id;
+                        }
+                    }
+                }
+            } else if (state.resizeDirection === 'n' || state.resizeDirection === 'w') {
+                // For n and w, the visual preview has already been applied
+                // We just need to update the cell occupancy
+                
+                const currentStyle = window.getComputedStyle(panelEl);
+                const gridColumn = currentStyle.gridColumnStart;
+                const gridRow = currentStyle.gridRowStart;
+                const gridSpanCol = panelEl.style.gridColumn.includes('span') ? 
+                    parseInt(panelEl.style.gridColumn.split('span ')[1]) : 1;
+                const gridSpanRow = panelEl.style.gridRow.includes('span') ? 
+                    parseInt(panelEl.style.gridRow.split('span ')[1]) : 1;
+                
+                // Clear previous cell occupation
+                state.grid.cells.forEach(cell => {
+                    if (cell.panelId === state.resizingPanel.id) {
+                        cell.occupied = false;
+                        cell.panelId = null;
+                    }
+                });
+                
+                // Mark new cells as occupied
+                const startX = parseInt(gridColumn) - 1;
+                const startY = parseInt(gridRow) - 1;
+                
+                for (let y = startY; y < startY + gridSpanRow; y++) {
+                    for (let x = startX; x < startX + gridSpanCol; x++) {
+                        const cell = getCell(x, y);
+                        if (cell) {
+                            cell.occupied = true;
+                            cell.panelId = state.resizingPanel.id;
+                        }
+                    }
+                }
+                
+                // Update panel object
+                state.resizingPanel.cell = {
+                    x: startX,
+                    y: startY
+                };
+            }
+            
+            // Clean up
+            panelEl.classList.remove('resizing');
+            gridOverlayEl.classList.remove('visible');
+            
+            // Clear resize state
+            state.resizingPanel = null;
+            state.resizeDirection = '';
+            state.resizeStartCell = null;
+            state.resizeEndCell = null;
+            
+            // Clear any highlighted cells
+            document.querySelectorAll('.grid-cell.highlight').forEach(cell => {
+                cell.classList.remove('highlight');
+            });
+            
+            // Remove document listeners
+            document.removeEventListener('mousemove', handleResizeMove);
+            document.removeEventListener('mouseup', handleResizeEnd);
+            
+            // Update grid overlay
+            updateGridOverlay();
+        }
+        
+        // Controls toggle
+        controlsToggleEl.addEventListener('click', () => {
+            controlsEl.classList.toggle('collapsed');
+            controlsToggleEl.textContent = controlsEl.classList.contains('collapsed') ? '▼' : '▲';
+        });
+        
+        // Add panel button
+        addPanelBtnEl.addEventListener('click', () => {
+            showAddPanelModal();
+        });
+        
+        // Template selector
+        templateSelectorEl.addEventListener('change', () => {
+            const selectedUrl = templateSelectorEl.value;
+            if (selectedUrl) {
+                // Expand grid if needed before adding panel
+                if (!findEmptyCell()) {
+                    expandGridIfNeeded();
+                }
+                
+                addPanel(selectedUrl, templateSelectorEl.options[templateSelectorEl.selectedIndex].text);
+                templateSelectorEl.value = '';
+            }
+        });
+        
+        // Modal close
+        modalCloseEl.addEventListener('click', () => {
+            hideAddPanelModal();
+        });
+        
+        // Add panel confirm
+        addPanelConfirmEl.addEventListener('click', () => {
+            const url = validateUrl(panelUrlEl.value);
+            if (url) {
+                const title = panelTitleEl.value || `Panel ${state.nextPanelId}`;
+                
+                // Expand grid if needed before adding panel
+                if (!findEmptyCell()) {
+                    expandGridIfNeeded();
+                }
+                
+                addPanel(url, title);
+                hideAddPanelModal();
+                updatePanelLayout();
+            } else {
+                alert("Please enter a valid URL (including https:// or http://)");
+            }
+        });
+        
+        // Show add panel modal
+        function showAddPanelModal() {
+            addPanelModalEl.classList.add('visible');
+        }
+        
+        // Hide add panel modal
+        function hideAddPanelModal() {
+            addPanelModalEl.classList.remove('visible');
+            // Reset inputs
+            panelUrlEl.value = "https://example.com";
+            panelTitleEl.value = "";
+        }
+        
+        // Validate URL
+        function validateUrl(url) {
+            try {
+                const newUrl = new URL(url);
+                return newUrl.toString();
+            } catch(e) {
+                return false;
+            }
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            updateGridOverlay();
+            createDragHandles();
+        });
+        
+        // Handle keyboard events (Escape to cancel modals/dragging)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                // Close modal if open
+                if (addPanelModalEl.classList.contains('visible')) {
+                    hideAddPanelModal();
+                }
+                
+                // Cancel dragging
+                if (state.draggingPanel) {
+                    state.draggingPanel.element.classList.remove('dragging');
+                    gridOverlayEl.classList.remove('visible');
+                    state.draggingPanel = null;
+                    state.initialCell = null;
+                    state.dragOverCell = null;
+                    
+                    document.removeEventListener('mousemove', handleDragMove);
+                    document.removeEventListener('mouseup', handleDragEnd);
+                    
+                    updateGridOverlay();
+                }
+                
+                // Cancel resizing
+                if (state.resizingPanel) {
+                    state.resizingPanel.element.classList.remove('resizing');
+                    gridOverlayEl.classList.remove('visible');
+                    state.resizingPanel = null;
+                    state.resizeDirection = '';
+                    state.resizeStartCell = null;
+                    state.resizeEndCell = null;
+                    
+                    document.removeEventListener('mousemove', handleResizeMove);
+                    document.removeEventListener('mouseup', handleResizeEnd);
+                    
+                    updateGridOverlay();
+                }
+            }
+        });
+        
+        // Initialize dashboard with 2x2 grid by default
+        function initDashboard() {
+            // Initialize grid
+            initializeGrid(2, 2);
+            
+            // Add initial panels
+            addPanel('https://www.google.com', 'Google', getCell(0, 0));
+            addPanel('https://www.bbc.com', 'News', getCell(1, 0));
+            addPanel('https://www.openweathermap.org/widgets', 'Weather', getCell(0, 1));
+            addPanel('https://calendar.google.com/calendar/embed', 'Calendar', getCell(1, 1));
+            
+            // Add drag handles between panels
+            createDragHandles();
+            
+            // Collapse controls by default
+            controlsEl.classList.add('collapsed');
+            controlsToggleEl.textContent = '▼';
+        }
+        
+        // Create drag handles between panels
+        function createDragHandles() {
+            // Clear existing handles
+            document.querySelectorAll('.drag-handle').forEach(handle => handle.remove());
+            
+            // Create a hidden element for custom drag ghost
+            let ghostEl = document.querySelector('.drag-ghost');
+            if (!ghostEl) {
+                ghostEl = document.createElement('div');
+                ghostEl.className = 'drag-ghost';
+                ghostEl.textContent = '0';
+                document.body.appendChild(ghostEl);
+            }
+            
+            // Create horizontal handles (between rows)
+            for (let y = 1; y < state.grid.rows; y++) {
+                const handle = document.createElement('div');
+                handle.className = 'drag-handle horizontal';
+                handle.style.top = `${y * (100 / state.grid.rows)}%`;
+                handle.style.transform = 'translateY(-50%)';
+                handle.dataset.row = y;
+                handle.draggable = true;
+                
+                // Get current percentage
+                const currentPos = y * (100 / state.grid.rows);
+                handle.dataset.startPercentage = currentPos;
+                
+                // Setup drag events
+                handle.addEventListener('dragstart', handleDragStart);
+                handle.addEventListener('drag', handleDrag);
+                handle.addEventListener('dragend', handleDragEnd);
+                
+                // Need to prevent default on dragover to allow dropping
+                handle.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    return false;
+                });
+                
+                // Add to dashboard
+                dashboardEl.appendChild(handle);
+            }
+            
+            // Create vertical handles (between columns)
+            for (let x = 1; x < state.grid.cols; x++) {
+                const handle = document.createElement('div');
+                handle.className = 'drag-handle vertical';
+                handle.style.left = `${x * (100 / state.grid.cols)}%`;
+                handle.style.transform = 'translateX(-50%)';
+                handle.dataset.col = x;
+                handle.draggable = true;
+                
+                // Get current percentage
+                const currentPos = x * (100 / state.grid.cols);
+                handle.dataset.startPercentage = currentPos;
+                
+                // Setup drag events
+                handle.addEventListener('dragstart', handleDragStart);
+                handle.addEventListener('drag', handleDrag);
+                handle.addEventListener('dragend', handleDragEnd);
+                
+                // Need to prevent default on dragover to allow dropping
+                handle.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    return false;
+                });
+                
+                // Add to dashboard
+                dashboardEl.appendChild(handle);
+            }
+            
+            // Add document-level dragover event to allow drag operation to continue
+            // even when mouse is not over the handle
+            dashboardEl.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                if (state.activeDragHandle) {
+                    // Process drag event on the container as if it were on the handle
+                    handleDrag(e);
+                }
+                return false;
+            });
+        }
+        
+        // Handle drag
+        function handleDrag(e) {
+            // Check if we have an active drag handle, but don't check e.clientX
+            // This allows drag to continue even when mouse moves faster than handle
+            if (!state.activeDragHandle) return;
+            
+            // Skip empty drag events that sometimes occur during fast movements
+            if (e.clientX === 0 && e.clientY === 0) return;
+            
+            const dashboardRect = dashboardEl.getBoundingClientRect();
+            
+            if (state.activeDragHandle.classList.contains('horizontal')) {
+                // Horizontal handle (row divider)
+                const newY = ((e.clientY - dashboardRect.top) / dashboardRect.height) * 100;
+                
+                // Limit within reasonable bounds but allow full range
+                if (newY > 0 && newY < 100) {
+                    state.activeDragHandle.style.top = `${newY}%`;
+                }
+            } else {
+                // Vertical handle (column divider)
+                const newX = ((e.clientX - dashboardRect.left) / dashboardRect.width) * 100;
+                
+                // Limit within reasonable bounds but allow full range
+                if (newX > 0 && newX < 100) {
+                    state.activeDragHandle.style.left = `${newX}%`;
+                }
+            }
+        }
+        
+        // Handle drag start
+        function handleDragStart(e) {
+            state.activeDragHandle = e.target;
+            state.activeDragHandle.classList.add('active');
+            
+            // Store initial position
+            const dashboardRect = dashboardEl.getBoundingClientRect();
+            if (state.activeDragHandle.classList.contains('horizontal')) {
+                state.dragHandleStartPos = e.clientY;
+                state.dragHandleStartPercentage = parseFloat(state.activeDragHandle.dataset.startPercentage);
+            } else {
+                state.dragHandleStartPos = e.clientX;
+                state.dragHandleStartPercentage = parseFloat(state.activeDragHandle.dataset.startPercentage);
+            }
+            
+            // Set drag image to a 1px transparent element (essentially hiding it)
+            const ghostEl = document.querySelector('.drag-ghost');
+            e.dataTransfer.setDragImage(ghostEl, 0, 0);
+            
+            // Store handle type and initial percentage in dataTransfer
+            e.dataTransfer.setData('text/plain', 
+                JSON.stringify({
+                    type: state.activeDragHandle.classList.contains('horizontal') ? 'row' : 'column',
+                    startPercentage: state.dragHandleStartPercentage,
+                    index: state.activeDragHandle.classList.contains('horizontal') 
+                        ? state.activeDragHandle.dataset.row 
+                        : state.activeDragHandle.dataset.col
+                })
+            );
+            
+            // Set move effect
+            e.dataTransfer.effectAllowed = 'move';
+            
+            // Prevent other events to ensure the drag completes
+            e.stopPropagation();
+        }
+        
+        // Handle drag end
+        function handleDragEnd(e) {
+            if (!state.activeDragHandle) return;
+            
+            const dashboardRect = dashboardEl.getBoundingClientRect();
+            let newPercentage;
+            
+            if (state.activeDragHandle.classList.contains('horizontal')) {
+                // Horizontal handle (row divider)
+                const rowIndex = parseInt(state.activeDragHandle.dataset.row);
+                newPercentage = parseFloat(state.activeDragHandle.style.top);
+                
+                // Update grid template rows
+                const rowFractions = [];
+                const newValue = newPercentage / 100;
+                
+                for (let i = 0; i < state.grid.rows; i++) {
+                    if (i === rowIndex - 1) {
+                        rowFractions.push(newValue);
+                    } else if (i === rowIndex) {
+                        rowFractions.push(1 - newValue);
+                    } else {
+                        rowFractions.push(1 / state.grid.rows);
+                    }
+                }
+                
+                // Normalize to ensure they add up to 1
+                const total = rowFractions.reduce((a, b) => a + b, 0);
+                const normalizedFractions = rowFractions.map(f => f / total);
+                
+                // Set the new grid template
+                const templateRows = normalizedFractions.map(f => `${f}fr`).join(' ');
+                dashboardEl.style.gridTemplateRows = templateRows;
+                
+                // Update the data attribute with the new percentage
+                state.activeDragHandle.dataset.startPercentage = newPercentage;
+                
+            } else {
+                // Vertical handle (column divider)
+                const colIndex = parseInt(state.activeDragHandle.dataset.col);
+                newPercentage = parseFloat(state.activeDragHandle.style.left);
+                
+                // Update grid template columns
+                const colFractions = [];
+                const newValue = newPercentage / 100;
+                
+                for (let i = 0; i < state.grid.cols; i++) {
+                    if (i === colIndex - 1) {
+                        colFractions.push(newValue);
+                    } else if (i === colIndex) {
+                        colFractions.push(1 - newValue);
+                    } else {
+                        colFractions.push(1 / state.grid.cols);
+                    }
+                }
+                
+                // Normalize to ensure they add up to 1
+                const total = colFractions.reduce((a, b) => a + b, 0);
+                const normalizedFractions = colFractions.map(f => f / total);
+                
+                // Set the new grid template
+                const templateCols = normalizedFractions.map(f => `${f}fr`).join(' ');
+                dashboardEl.style.gridTemplateColumns = templateCols;
+                
+                // Update the data attribute with the new percentage
+                state.activeDragHandle.dataset.startPercentage = newPercentage;
+            }
+            
+            // Clean up
+            state.activeDragHandle.classList.remove('active');
+            state.activeDragHandle = null;
+            state.dragHandleStartPos = null;
+            state.dragHandleStartPercentage = null;
+        }
+        
+        // Update grid overlay and drag handles when panels change
+        function updatePanelLayout() {
+            updateGridOverlay();
+            createDragHandles();
+        }
+        
+        // Change grid shape based on dropdown selection
+        function changeGridShape(shape) {
+            // Parse the shape (format: "ROWSxCOLS")
+            const [rows, cols] = shape.split('x').map(Number);
+            
+            if (isNaN(rows) || isNaN(cols) || rows < 1 || cols < 1) {
+                console.error('Invalid grid shape:', shape);
+                return;
+            }
+            
+            // Save current occupied cells
+            const occupiedCells = state.grid.cells.filter(cell => cell.occupied);
+            
+            // Reinitialize with new grid dimensions
+            initializeGrid(rows, cols);
+            
+            // Restore occupied cells (only those that fit in the new grid)
+            occupiedCells.forEach(oldCell => {
+                if (oldCell.x < cols && oldCell.y < rows) {
+                    const newCell = getCell(oldCell.x, oldCell.y);
+                    if (newCell) {
+                        newCell.occupied = true;
+                        newCell.panelId = oldCell.panelId;
+                    }
+                } else {
+                    // Find the panel that was in this cell
+                    const panel = state.panels.find(p => p.id === oldCell.panelId);
+                    if (panel) {
+                        // Remove panels that don't fit
+                        removePanel(panel.id);
+                    }
+                }
+            });
+            
+            // Reposition all panels based on new grid
+            state.panels.forEach(panel => repositionPanel(panel));
+            
+            // Update grid handles
+            createDragHandles();
+        }
+        
+        // Add event listeners
+        gridShapeSelectorEl.addEventListener('change', () => {
+            const selectedShape = gridShapeSelectorEl.value;
+            changeGridShape(selectedShape);
+        });
+        
+        // Initialize on page load
+        window.addEventListener('load', initDashboard);
+    </script>
+</body>
+</html>
