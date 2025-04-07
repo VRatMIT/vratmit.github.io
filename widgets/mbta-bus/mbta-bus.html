@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MBTA Bus Tracker</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            background-color: transparent;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .bus-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            align-items: center;
+            padding: 5px;
+            box-sizing: border-box;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .cards-wrapper {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            justify-content: space-around;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .bus-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 95%;
+            height: 45%;
+            overflow: hidden;
+            text-align: center;
+            border-radius: 10px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+            position: relative;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        
+        .harvard-card {
+            background-color: rgba(220, 220, 220, 0.3); /* Light gray */
+        }
+        
+        .nubian-card {
+            background-color: rgba(220, 220, 220, 0.3); /* Light gray */
+        }
+        
+        .bus-icon {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 30px;
+            height: 30px;
+            background-color: #007bff;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .stop-name {
+            font-size: min(5.5vw, 5.5vh, 1.8rem);
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .direction {
+            font-size: min(4vw, 4vh, 1.4rem);
+            color: #555;
+            margin-bottom: 10px;
+        }
+        
+        .arrival-time {
+            font-size: min(10vw, 10vh, 3.5rem);
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .arrival-suffix {
+            font-size: min(4vw, 4vh, 1.4rem);
+            color: #555;
+            margin-top: 5px;
+        }
+        
+        .multiple-arrivals {
+            margin-top: 10px;
+            font-size: min(3.5vw, 3.5vh, 1.1rem);
+            color: #555;
+        }
+        
+        .error-message {
+            color: #d9534f;
+            font-size: min(4vw, 4vh, 1.2rem);
+            padding: 10px;
+        }
+        
+        .loading {
+            font-size: min(5vw, 5vh, 1.8rem);
+            color: #555;
+        }
+        
+        /* Responsive layout for very small heights */
+        @media (max-height: 250px) {
+            .cards-wrapper {
+                flex-direction: row;
+            }
+            
+            .bus-card {
+                height: 90%;
+                width: 45%;
+            }
+            
+            .stop-name {
+                font-size: min(4.5vw, 4.5vh, 1.4rem);
+            }
+            
+            .direction {
+                font-size: min(3vw, 3vh, 1rem);
+                margin-bottom: 5px;
+            }
+            
+            .arrival-time {
+                font-size: min(8vw, 8vh, 2.5rem);
+            }
+            
+            .arrival-suffix {
+                font-size: min(3vw, 3vh, 1rem);
+                margin-top: 2px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bus-container">
+        <div class="cards-wrapper">
+            <!-- Harvard-bound card -->
+            <div class="bus-card harvard-card">
+                <div class="bus-icon">1</div>
+                <div class="stop-name">77 Mass Ave</div>
+                <div class="direction">To Harvard</div>
+                <div class="arrival-time" id="harvard-time">--</div>
+                <div class="arrival-suffix" id="harvard-suffix">minutes</div>
+                <div class="multiple-arrivals" id="harvard-next"></div>
+            </div>
+            
+            <!-- Nubian-bound card -->
+            <div class="bus-card nubian-card">
+                <div class="bus-icon">1</div>
+                <div class="stop-name">84 Mass Ave</div>
+                <div class="direction">To Nubian</div>
+                <div class="arrival-time" id="nubian-time">--</div>
+                <div class="arrival-suffix" id="nubian-suffix">minutes</div>
+                <div class="multiple-arrivals" id="nubian-next"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM elements
+        const harvardTime = document.getElementById('harvard-time');
+        const harvardSuffix = document.getElementById('harvard-suffix');
+        const harvardNext = document.getElementById('harvard-next');
+        const nubianTime = document.getElementById('nubian-time');
+        const nubianSuffix = document.getElementById('nubian-suffix');
+        const nubianNext = document.getElementById('nubian-next');
+        
+        // Stop information
+        const stops = {
+            harvard: {
+                stopId: '1795', // 77 Mass Ave (Harvard-bound/outbound)
+                timeElement: harvardTime,
+                suffixElement: harvardSuffix,
+                nextElement: harvardNext
+            },
+            nubian: {
+                stopId: '1797', // 84 Mass Ave (Nubian-bound/inbound)
+                timeElement: nubianTime,
+                suffixElement: nubianSuffix,
+                nextElement: nubianNext
+            }
+        };
+        
+        // API configuration
+        const API_URL = 'https://api-v3.mbta.com';
+        const API_KEY = ''; // Add your API key here if needed
+        
+        // Format prediction to minutes
+        function formatPrediction(prediction) {
+            // Check if we have arrival_time, if not use departure_time
+            const arrivalTimeStr = prediction.attributes.arrival_time || prediction.attributes.departure_time;
+            
+            // Log the raw prediction time for debugging
+            console.log('Raw prediction time:', arrivalTimeStr);
+            
+            if (!arrivalTimeStr) {
+                console.log('No arrival or departure time in prediction:', prediction);
+                return {
+                    display: 'N/A',
+                    minutes: 999,
+                    suffix: ''
+                };
+            }
+            
+            const arrivalTime = new Date(arrivalTimeStr);
+            const now = new Date();
+            
+            // Reject predictions with years far in the future (test data)
+            if (arrivalTime.getFullYear() > now.getFullYear() + 1) {
+                console.log('Rejecting future test data:', arrivalTimeStr);
+                return {
+                    display: 'Invalid',
+                    minutes: 999,
+                    suffix: ''
+                };
+            }
+            
+            // Calculate minutes difference
+            let minutesDiff = Math.round((arrivalTime - now) / (1000 * 60));
+            
+            console.log('Minutes diff:', minutesDiff, 'Arrival:', arrivalTime.toLocaleTimeString(), 'Now:', now.toLocaleTimeString());
+            
+            // Handle arriving bus
+            if (minutesDiff <= 0) {
+                return {
+                    display: 'Now',
+                    minutes: 0,
+                    suffix: ''
+                };
+            }
+            
+            // Handle "1 minute" vs "X minutes"
+            if (minutesDiff === 1) {
+                return {
+                    display: '1',
+                    minutes: 1,
+                    suffix: 'minute'
+                };
+            }
+            
+            return {
+                display: minutesDiff.toString(),
+                minutes: minutesDiff,
+                suffix: 'minutes'
+            };
+        }
+        
+        // Update the display with prediction data
+        function updateDisplay(predictions, config) {
+            // Log predictions data for debugging
+            console.log('Updating display with predictions, count:', predictions.length);
+            
+            // Clear previous data
+            config.timeElement.textContent = '--';
+            config.suffixElement.textContent = 'minutes';
+            config.nextElement.textContent = '';
+            
+            if (!predictions || predictions.length === 0) {
+                config.timeElement.textContent = 'No';
+                config.suffixElement.textContent = 'buses';
+                return;
+            }
+            
+            // Filter predictions to only include those with actual times in a reasonable range
+            const now = new Date();
+            const validPredictions = predictions.filter(pred => {
+                if (!pred.attributes || (!pred.attributes.arrival_time && !pred.attributes.departure_time)) {
+                    return false;
+                }
+                
+                const predTime = new Date(pred.attributes.arrival_time || pred.attributes.departure_time);
+                
+                // Filter out test data from far future years and ensure time is in the future
+                return predTime.getFullYear() <= now.getFullYear() + 1 && 
+                       predTime > now;
+            });
+            
+            console.log('Valid predictions after time filtering:', validPredictions.length);
+            
+            if (validPredictions.length === 0) {
+                // If we didn't find any valid predictions, try to extract from all data by looking at schedule
+                console.log('No valid predictions found, checking schedules');
+                
+                // Attempt to extract schedule data
+                const scheduledPredictions = [];
+                
+                // Examine raw data for schedule information
+                predictions.forEach(pred => {
+                    if (pred.attributes && pred.attributes.schedule) {
+                        console.log('Found schedule data:', pred.attributes.schedule);
+                        scheduledPredictions.push(pred);
+                    }
+                });
+                
+                if (scheduledPredictions.length > 0) {
+                    console.log('Using schedule data for predictions:', scheduledPredictions.length);
+                    // Use the scheduled predictions instead
+                    updateDisplayWithSchedule(scheduledPredictions, config);
+                    return;
+                }
+                
+                // Fall back to showing no data
+                config.timeElement.textContent = 'No';
+                config.suffixElement.textContent = 'data';
+                return;
+            }
+            
+            // Sort predictions by minutes from now (not by raw timestamp)
+            validPredictions.sort((a, b) => {
+                const timeA = new Date(a.attributes.arrival_time || a.attributes.departure_time);
+                const timeB = new Date(b.attributes.arrival_time || b.attributes.departure_time);
+                const diffA = (timeA - now) / (1000 * 60);
+                const diffB = (timeB - now) / (1000 * 60);
+                return diffA - diffB;
+            });
+            
+            // Get next arrival
+            const nextArrival = formatPrediction(validPredictions[0]);
+            config.timeElement.textContent = nextArrival.display;
+            config.suffixElement.textContent = nextArrival.suffix;
+            
+            // Show additional upcoming buses
+            if (validPredictions.length > 1) {
+                const upcomingTimes = [];
+                
+                // Add up to 2 more upcoming buses
+                for (let i = 1; i < Math.min(3, validPredictions.length); i++) {
+                    const prediction = formatPrediction(validPredictions[i]);
+                    if (prediction.minutes < 120) { // Only show predictions within 2 hours
+                        upcomingTimes.push(`${prediction.display} ${prediction.suffix}`);
+                    }
+                }
+                
+                if (upcomingTimes.length > 0) {
+                    config.nextElement.textContent = `Next: ${upcomingTimes.join(', ')}`;
+                }
+            }
+        }
+        
+        // Fallback method to extract time information from schedule data
+        function updateDisplayWithSchedule(predictions, config) {
+            // Extract schedule information
+            const schedules = predictions.map(pred => {
+                if (pred.attributes && pred.attributes.schedule) {
+                    const arrivalTime = pred.attributes.schedule.arrival_time;
+                    const departureTime = pred.attributes.schedule.departure_time;
+                    const timestamp = arrivalTime || departureTime;
+                    if (timestamp) {
+                        // Return normalized time object with current date but scheduled time
+                        const now = new Date();
+                        const time = new Date(now.toDateString() + ' ' + timestamp);
+                        return {
+                            time: time,
+                            raw: timestamp
+                        };
+                    }
+                }
+                return null;
+            }).filter(s => s !== null);
+            
+            console.log('Extracted schedules:', schedules);
+            
+            if (schedules.length === 0) {
+                config.timeElement.textContent = 'No';
+                config.suffixElement.textContent = 'schedule';
+                return;
+            }
+            
+            // Sort schedules by time
+            const now = new Date();
+            schedules.sort((a, b) => a.time - b.time);
+            
+            // Find next scheduled time
+            const nextScheduled = schedules.find(s => s.time > now);
+            
+            if (!nextScheduled) {
+                config.timeElement.textContent = 'Check';
+                config.suffixElement.textContent = 'schedule';
+                return;
+            }
+            
+            // Calculate minutes until next scheduled arrival
+            const minutesDiff = Math.round((nextScheduled.time - now) / (1000 * 60));
+            
+            if (minutesDiff <= 0) {
+                config.timeElement.textContent = 'Now';
+                config.suffixElement.textContent = '';
+            } else if (minutesDiff === 1) {
+                config.timeElement.textContent = '1';
+                config.suffixElement.textContent = 'minute';
+            } else {
+                config.timeElement.textContent = minutesDiff.toString();
+                config.suffixElement.textContent = 'minutes';
+            }
+            
+            // Show upcoming schedule times
+            const upcomingTimes = [];
+            for (let i = 1; i < Math.min(3, schedules.length); i++) {
+                const schedule = schedules[i];
+                if (schedule.time > now) {
+                    const mins = Math.round((schedule.time - now) / (1000 * 60));
+                    if (mins < 120) { // Only show within 2 hours
+                        upcomingTimes.push(`${mins} ${mins === 1 ? 'minute' : 'minutes'}`);
+                    }
+                }
+            }
+            
+            if (upcomingTimes.length > 0) {
+                config.nextElement.textContent = `Next: ${upcomingTimes.join(', ')}`;
+            }
+        }
+        
+        // Fetch predictions for a specific stop
+        async function fetchPredictions(stop) {
+            const config = stops[stop];
+            
+            try {
+                // Set loading state
+                config.timeElement.textContent = '...';
+                config.suffixElement.textContent = '';
+                
+                // Build the API URL with current timestamp to avoid caching
+                let url = `${API_URL}/predictions?filter[route]=1&filter[stop]=${config.stopId}&sort=arrival_time&page[limit]=10`;
+                if (API_KEY) {
+                    url += `&api_key=${API_KEY}`;
+                }
+                
+                console.log(`Fetching predictions for ${stop} from: ${url}`);
+                
+                // Fetch predictions
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`API returned status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log(`${stop} predictions data:`, data);
+                
+                // Update the display with the predictions
+                updateDisplay(data.data, config);
+            } catch (error) {
+                console.error(`Error fetching ${stop} predictions:`, error);
+                config.timeElement.textContent = 'Error';
+                config.suffixElement.textContent = '';
+            }
+        }
+        
+        // Fetch predictions for all stops
+        function fetchAllPredictions() {
+            fetchPredictions('harvard');
+            fetchPredictions('nubian');
+        }
+        
+        // Initialize the tracker
+        fetchAllPredictions();
+        
+        // Refresh predictions every 30 seconds
+        setInterval(fetchAllPredictions, 30 * 1000);
+        
+        // Also refresh when window gets focus
+        window.addEventListener('focus', fetchAllPredictions);
+    </script>
+</body>
+</html> 
