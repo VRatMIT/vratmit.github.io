@@ -294,7 +294,7 @@
             <option value="">Quick Add</option>
             <option value="https://www.google.com">Google</option>
             <option value="https://www.openweathermap.org/widgets">Weather</option>
-            <option value="https://www.timeanddate.com/worldclock/widget.html">Clock</option>
+            <option value="widgets/clock/clock.html">Clock</option>
             <option value="https://www.bbc.com">News</option>
             <option value="https://calendar.google.com/calendar/embed">Calendar</option>
         </select>
@@ -957,7 +957,9 @@
                     expandGridIfNeeded();
                 }
                 
-                addPanel(selectedUrl, templateSelectorEl.options[templateSelectorEl.selectedIndex].text);
+                // Use the option text as the title
+                const selectedTitle = templateSelectorEl.options[templateSelectorEl.selectedIndex].text;
+                addPanel(selectedUrl, selectedTitle);
                 templateSelectorEl.value = '';
             }
         });
@@ -1061,7 +1063,7 @@
             
             // Add initial panels
             addPanel('https://www.google.com', 'Google', getCell(0, 0));
-            addPanel('https://www.bbc.com', 'News', getCell(1, 0));
+            addPanel('widgets/clock/clock.html', 'Clock', getCell(1, 0));
             addPanel('https://www.openweathermap.org/widgets', 'Weather', getCell(0, 1));
             addPanel('https://calendar.google.com/calendar/embed', 'Calendar', getCell(1, 1));
             
