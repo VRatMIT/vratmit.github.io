@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Widget</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            background-color: transparent;
+        }
+        
+        .weather-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            position: relative;
+        }
+        
+        .current-weather {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .weather-icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .sunny {
+            color: #FFD700;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+        
+        .cloudy {
+            color: #A9A9A9;
+        }
+        
+        .rainy {
+            color: #4682B4;
+            animation: rain 1s infinite;
+        }
+        
+        .snowy {
+            color: #FFFFFF;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+            animation: snow 1s infinite;
+        }
+        
+        .thunderstorm {
+            color: #4B0082;
+            animation: lightning 2s infinite;
+        }
+        
+        .mist {
+            color: #D3D3D3;
+            animation: mist 3s infinite;
+        }
+        
+        @keyframes rain {
+            0% { transform: translateY(-5px); }
+            50% { transform: translateY(5px); }
+            100% { transform: translateY(-5px); }
+        }
+        
+        @keyframes snow {
+            0% { transform: translateY(-5px) rotate(0deg); }
+            50% { transform: translateY(5px) rotate(180deg); }
+            100% { transform: translateY(-5px) rotate(360deg); }
+        }
+        
+        @keyframes lightning {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+        
+        @keyframes mist {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+        
+        .temperature-display {
+            width: 100%;
+            text-align: center;
+            font-weight: bold;
+            color: #333;
+            line-height: 0.9;
+            margin: 0;
+            padding: 0;
+            position: relative;
+        }
+        
+        .condition-display {
+            width: 100%;
+            text-align: center;
+            color: #555;
+            line-height: 1;
+            margin: 0;
+            padding: 0;
+            position: relative;
+        }
+        
+        .location-display {
+            width: 100%;
+            text-align: center;
+            color: #777;
+            line-height: 1;
+            margin: 0;
+            padding: 0;
+            position: relative;
+        }
+        
+        .forecast-container {
+            width: 100%;
+            overflow-x: auto;
+            white-space: nowrap;
+            padding: 5px 0;
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .forecast-item {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 40px;
+            padding: 2px;
+        }
+        
+        .forecast-time {
+            font-size: 0.7em;
+            color: #666;
+            margin-bottom: 2px;
+        }
+        
+        .forecast-icon {
+            font-size: 1.2em;
+            margin: 2px 0;
+        }
+        
+        .forecast-temp {
+            font-size: 0.8em;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .horizontal-layout {
+            flex-direction: row;
+            justify-content: space-around;
+        }
+        
+        .horizontal-layout .temperature-display {
+            width: auto;
+            margin-right: 10px;
+        }
+        
+        .horizontal-layout .condition-display {
+            width: auto;
+            margin-right: 10px;
+        }
+        
+        .horizontal-layout .location-display {
+            width: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="weather-container" id="weather-container">
+        <div class="current-weather">
+            <div class="weather-icon" id="weather-icon">☀️</div>
+            <div class="temperature-display" id="temperature-display">--°F</div>
+            <div class="condition-display" id="condition-display">Loading...</div>
+            <div class="location-display" id="location-display">Location</div>
+        </div>
+        <div class="forecast-container" id="forecast-container">
+            <!-- Forecast items will be added here dynamically -->
+        </div>
+    </div>
+
+    <script>
+        // DOM elements
+        const weatherContainer = document.getElementById('weather-container');
+        const weatherIcon = document.getElementById('weather-icon');
+        const temperatureDisplay = document.getElementById('temperature-display');
+        const conditionDisplay = document.getElementById('condition-display');
+        const locationDisplay = document.getElementById('location-display');
+        const forecastContainer = document.getElementById('forecast-container');
+        
+        // Weather data
+        let weatherData = {
+            temperature: '--',
+            condition: 'Loading...',
+            location: 'Location',
+            forecast: []
+        };
+        
+        // Weather icons mapping
+        const weatherIcons = {
+            'Clear': { icon: '☀️', class: 'sunny' },
+            'Clouds': { icon: '☁️', class: 'cloudy' },
+            'Rain': { icon: '🌧️', class: 'rainy' },
+            'Drizzle': { icon: '🌧️', class: 'rainy' },
+            'Thunderstorm': { icon: '⛈️', class: 'thunderstorm' },
+            'Snow': { icon: '❄️', class: 'snowy' },
+            'Mist': { icon: '🌫️', class: 'mist' },
+            'Fog': { icon: '🌫️', class: 'mist' },
+            'Haze': { icon: '🌫️', class: 'mist' }
+        };
+        
+        // Update weather display
+        function updateWeather() {
+            temperatureDisplay.textContent = `${weatherData.temperature}°F`;
+            conditionDisplay.textContent = weatherData.condition;
+            locationDisplay.textContent = weatherData.location;
+            
+            // Update weather icon
+            const iconData = weatherIcons[weatherData.condition] || { icon: '❓', class: '' };
+            weatherIcon.textContent = iconData.icon;
+            weatherIcon.className = 'weather-icon ' + iconData.class;
+            
+            // Update forecast
+            updateForecast();
+            
+            // Adjust sizes after updating content
+            adjustSizes();
+        }
+        
+        // Update forecast display
+        function updateForecast() {
+            forecastContainer.innerHTML = '';
+            
+            weatherData.forecast.forEach(hour => {
+                const forecastItem = document.createElement('div');
+                forecastItem.className = 'forecast-item';
+                
+                const time = document.createElement('div');
+                time.className = 'forecast-time';
+                time.textContent = hour.time;
+                
+                const icon = document.createElement('div');
+                icon.className = 'forecast-icon';
+                const iconData = weatherIcons[hour.condition] || { icon: '❓', class: '' };
+                icon.textContent = iconData.icon;
+                icon.classList.add(iconData.class);
+                
+                const temp = document.createElement('div');
+                temp.className = 'forecast-temp';
+                temp.textContent = `${hour.temperature}°F`;
+                
+                forecastItem.appendChild(time);
+                forecastItem.appendChild(icon);
+                forecastItem.appendChild(temp);
+                forecastContainer.appendChild(forecastItem);
+            });
+        }
+        
+        // Format time for forecast
+        function formatTime(timestamp) {
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleTimeString([], { hour: 'numeric' });
+        }
+        
+        // Dynamically adjust font sizes to maximize space utilization
+        function adjustSizes() {
+            const containerWidth = weatherContainer.clientWidth;
+            const containerHeight = weatherContainer.clientHeight;
+            
+            // Calculate optimal font sizes for current weather
+            const currentWeatherHeight = containerHeight * 0.6;
+            const forecastHeight = containerHeight * 0.4;
+            
+            // Adjust current weather section
+            const currentWeather = document.querySelector('.current-weather');
+            currentWeather.style.height = `${currentWeatherHeight}px`;
+            
+            // Adjust forecast section
+            forecastContainer.style.height = `${forecastHeight}px`;
+            
+            // Calculate font sizes for current weather
+            const tempWidthRatio = containerWidth / temperatureDisplay.offsetWidth;
+            const tempHeightRatio = currentWeatherHeight * 0.4 / temperatureDisplay.offsetHeight;
+            const tempRatio = Math.min(tempWidthRatio, tempHeightRatio);
+            
+            const iconHeightRatio = currentWeatherHeight * 0.2 / weatherIcon.offsetHeight;
+            const iconRatio = Math.min(tempWidthRatio, iconHeightRatio);
+            
+            const conditionHeightRatio = currentWeatherHeight * 0.2 / conditionDisplay.offsetHeight;
+            const conditionRatio = Math.min(tempWidthRatio, conditionHeightRatio);
+            
+            const locationHeightRatio = currentWeatherHeight * 0.2 / locationDisplay.offsetHeight;
+            const locationRatio = Math.min(tempWidthRatio, locationHeightRatio);
+            
+            // Apply font sizes
+            temperatureDisplay.style.fontSize = `${Math.floor(100 * tempRatio)}px`;
+            weatherIcon.style.fontSize = `${Math.floor(50 * iconRatio)}px`;
+            conditionDisplay.style.fontSize = `${Math.floor(50 * conditionRatio)}px`;
+            locationDisplay.style.fontSize = `${Math.floor(30 * locationRatio)}px`;
+            
+            // Adjust forecast item sizes
+            const forecastItems = document.querySelectorAll('.forecast-item');
+            const forecastItemWidth = Math.min(containerWidth / 12, 50);
+            
+            forecastItems.forEach(item => {
+                item.style.minWidth = `${forecastItemWidth}px`;
+                const time = item.querySelector('.forecast-time');
+                const icon = item.querySelector('.forecast-icon');
+                const temp = item.querySelector('.forecast-temp');
+                
+                time.style.fontSize = `${Math.floor(forecastHeight * 0.15)}px`;
+                icon.style.fontSize = `${Math.floor(forecastHeight * 0.25)}px`;
+                temp.style.fontSize = `${Math.floor(forecastHeight * 0.15)}px`;
+            });
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', adjustSizes);
+        
+        // Initial size adjustment (after a slight delay to ensure rendering)
+        setTimeout(adjustSizes, 50);
+        
+        function fetchWeatherData() {
+            const apiKey = '6114bcb2d951255bdd1370271917be70';
+            const city = 'Boston'; // Default city, you can change this
+            const units = 'imperial'; // Use imperial units (Fahrenheit)
+            
+            // Fetch current weather
+            fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&units=${units}&appid=${apiKey}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Weather data fetch failed');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    weatherData = {
+                        temperature: Math.round(data.main.temp),
+                        condition: data.weather[0].main,
+                        location: `${data.name}, ${data.sys.country}`,
+                        forecast: []
+                    };
+                    
+                    // Fetch forecast data
+                    return fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${city}&units=${units}&appid=${apiKey}`);
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Forecast data fetch failed');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Process forecast data for next 12 hours
+                    const now = Math.floor(Date.now() / 1000);
+                    const forecast = data.list
+                        .filter(item => item.dt > now)
+                        .slice(0, 12)
+                        .map(item => ({
+                            time: formatTime(item.dt),
+                            temperature: Math.round(item.main.temp),
+                            condition: item.weather[0].main
+                        }));
+                    
+                    weatherData.forecast = forecast;
+                    updateWeather();
+                })
+                .catch(error => {
+                    console.error('Error fetching weather data:', error);
+                    weatherData = {
+                        temperature: '--',
+                        condition: 'Error',
+                        location: 'Unable to fetch data',
+                        forecast: []
+                    };
+                    updateWeather();
+                });
+        }
+        
+        // Fetch weather data every 5 minutes
+        fetchWeatherData();
+        setInterval(fetchWeatherData, 300000);
+    </script>
+</body>
+</html> 
