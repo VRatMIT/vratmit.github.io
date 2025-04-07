@@ -212,15 +212,15 @@
         
         // Weather icons mapping
         const weatherIcons = {
-            'Clear': { icon: '☀️', class: 'sunny' },
-            'Clouds': { icon: '☁️', class: 'cloudy' },
-            'Rain': { icon: '🌧️', class: 'rainy' },
-            'Drizzle': { icon: '🌧️', class: 'rainy' },
-            'Thunderstorm': { icon: '⛈️', class: 'thunderstorm' },
-            'Snow': { icon: '❄️', class: 'snowy' },
-            'Mist': { icon: '🌫️', class: 'mist' },
-            'Fog': { icon: '🌫️', class: 'mist' },
-            'Haze': { icon: '🌫️', class: 'mist' }
+            'Clear': { dayIcon: '☀️', nightIcon: '🌙', class: 'sunny' },
+            'Clouds': { dayIcon: '☁️', nightIcon: '☁️', class: 'cloudy' },
+            'Rain': { dayIcon: '🌧️', nightIcon: '🌧️', class: 'rainy' },
+            'Drizzle': { dayIcon: '🌧️', nightIcon: '🌧️', class: 'rainy' },
+            'Thunderstorm': { dayIcon: '⛈️', nightIcon: '⛈️', class: 'thunderstorm' },
+            'Snow': { dayIcon: '❄️', nightIcon: '❄️', class: 'snowy' },
+            'Mist': { dayIcon: '🌫️', nightIcon: '🌫️', class: 'mist' },
+            'Fog': { dayIcon: '🌫️', nightIcon: '🌫️', class: 'mist' },
+            'Haze': { dayIcon: '🌫️', nightIcon: '🌫️', class: 'mist' }
         };
         
         // Update weather display
@@ -229,9 +229,13 @@
             conditionDisplay.textContent = weatherData.condition;
             locationDisplay.textContent = weatherData.location;
             
-            // Update weather icon
-            const iconData = weatherIcons[weatherData.condition] || { icon: '❓', class: '' };
-            weatherIcon.textContent = iconData.icon;
+            // Check if it's night time
+            const now = new Date();
+            const isNight = now < new Date(weatherData.sunrise * 1000) || now > new Date(weatherData.sunset * 1000);
+            
+            // Update weather icon based on time of day
+            const iconData = weatherIcons[weatherData.condition] || { dayIcon: '❓', nightIcon: '❓', class: '' };
+            weatherIcon.textContent = isNight ? iconData.nightIcon : iconData.dayIcon;
             weatherIcon.className = 'weather-icon ' + iconData.class;
             
             // Update forecast
@@ -255,8 +259,8 @@
                 
                 const icon = document.createElement('div');
                 icon.className = 'forecast-icon';
-                const iconData = weatherIcons[hour.condition] || { icon: '❓', class: '' };
-                icon.textContent = iconData.icon;
+                const iconData = weatherIcons[hour.condition] || { dayIcon: '❓', nightIcon: '❓', class: '' };
+                icon.textContent = iconData.dayIcon;
                 icon.classList.add(iconData.class);
                 
                 const temp = document.createElement('div');
@@ -336,7 +340,7 @@
         
         function fetchWeatherData() {
             const apiKey = '6114bcb2d951255bdd1370271917be70';
-            const city = 'Boston'; // Default city, you can change this
+            const city = 'Cambridge'; // Default city, you can change this
             const units = 'imperial'; // Use imperial units (Fahrenheit)
             
             // Fetch current weather
@@ -352,6 +356,8 @@
                         temperature: Math.round(data.main.temp),
                         condition: data.weather[0].main,
                         location: `${data.name}, ${data.sys.country}`,
+                        sunrise: data.sys.sunrise,
+                        sunset: data.sys.sunset,
                         forecast: []
                     };
                     
