@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendar Events Widget</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            background-color: transparent;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .events-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 5px;
+            box-sizing: border-box;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .cards-wrapper {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            justify-content: space-around;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .venue-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 95%;
+            height: 45%;
+            overflow: hidden;
+            text-align: center;
+            border-radius: 10px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+            position: relative;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        
+        .metropolis-card {
+            background-color: rgba(173, 216, 230, 0.3); /* Light blue */
+        }
+        
+        .deep-card {
+            background-color: rgba(216, 191, 216, 0.3); /* Light purple */
+        }
+        
+        .status-display {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        
+        .venue-name {
+            font-size: min(6vw, 6vh, 2rem);
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .main-status {
+            font-size: min(8vw, 8vh, 3rem);
+            font-weight: bold;
+            text-align: center;
+            width: 100%;
+            line-height: 1.2;
+        }
+        
+        .status-open {
+            color: #4CAF50;
+        }
+        
+        .status-closed {
+            color: #F44336;
+        }
+        
+        .status-event {
+            color: #FF9800;
+        }
+        
+        .info-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: min(7vw, 7vh, 35px);
+            height: min(7vw, 7vh, 35px);
+            background-color: #0066CC;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: min(3.5vw, 3.5vh, 18px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            border: none;
+            z-index: 100;
+        }
+        
+        .info-popup {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.98);
+            display: none;
+            flex-direction: column;
+            padding: 15px;
+            box-sizing: border-box;
+            z-index: 200;
+            overflow: auto;
+        }
+        
+        .popup-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .popup-title {
+            font-size: min(5vw, 5vh, 1.8rem);
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .close-button {
+            width: min(7vw, 7vh, 32px);
+            height: min(7vw, 7vh, 32px);
+            background-color: #f44336;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: min(4vw, 4vh, 16px);
+            border: none;
+        }
+        
+        .events-list {
+            width: 100%;
+            overflow: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 5px;
+        }
+        
+        .event-item {
+            font-size: min(4.5vw, 4.5vh, 1.4rem);
+            color: #333;
+            margin: 5px 0;
+            text-align: center;
+            width: 90%;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: rgba(240, 240, 240, 0.7);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .event-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .event-time {
+            font-size: min(3.5vw, 3.5vh, 1.1rem);
+            color: #777;
+            margin-top: 2px;
+        }
+        
+        .event-location {
+            font-size: min(3vw, 3vh, 0.9rem);
+            color: #555;
+            font-style: italic;
+            margin-top: 5px;
+        }
+        
+        .no-events {
+            font-size: min(4.5vw, 4.5vh, 1.4rem);
+            color: #888;
+            text-align: center;
+            width: 100%;
+            padding: 20px 0;
+        }
+        
+        .loading {
+            font-size: min(4.5vw, 4.5vh, 1.6rem);
+            color: #555;
+            text-align: center;
+        }
+        
+        .upcoming-header {
+            font-size: min(4.5vw, 4.5vh, 1.4rem);
+            color: #555;
+            font-weight: bold;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            text-align: center;
+            width: 100%;
+        }
+        
+        .upcoming-event {
+            opacity: 0.85;
+        }
+        
+        .calendar-link {
+            font-size: min(3.5vw, 3.5vh, 1rem);
+            color: #0066CC;
+            text-decoration: underline;
+            margin-top: 15px;
+            cursor: pointer;
+            text-align: center;
+        }
+        
+        .operating-hours {
+            font-size: min(3vw, 2.5vh, 0.9rem);
+            color: #555;
+            margin-top: 10px;
+            text-align: center;
+        }
+        
+        .hours-title {
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+        
+        .hours-row {
+            margin: 1px 0;
+        }
+        
+        /* Responsive layout for very small heights */
+        @media (max-height: 250px) {
+            .cards-wrapper {
+                flex-direction: row;
+            }
+            
+            .venue-card {
+                height: 90%;
+                width: 45%;
+            }
+            
+            .venue-name {
+                font-size: min(4.5vw, 4.5vh, 1.4rem);
+                margin-bottom: 3px;
+            }
+            
+            .main-status {
+                font-size: min(6vw, 6vh, 2rem);
+            }
+            
+            .info-button {
+                width: min(5vw, 5vh, 25px);
+                height: min(5vw, 5vh, 25px);
+                font-size: min(3vw, 3vh, 14px);
+                top: 5px;
+                right: 5px;
+            }
+            
+            .operating-hours {
+                font-size: min(2.5vw, 2vh, 0.8rem);
+                margin-top: 5px;
+            }
+            
+            .hours-title {
+                margin-bottom: 1px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="events-container">
+        <div class="cards-wrapper">
+            <!-- Metropolis Card -->
+            <div class="venue-card metropolis-card">
+                <div class="status-display" id="metropolis-status">
+                    <div class="venue-name">Metropolis</div>
+                    <div class="main-status loading" id="metropolis-main-status">Loading...</div>
+                    <div class="operating-hours">
+                        <div class="hours-title">Operating Hours:</div>
+                        <div class="hours-row">Mon-Fri: 10am - 10pm</div>
+                        <div class="hours-row">Sat: 10am - 6pm</div>
+                        <div class="hours-row">Sun: Closed</div>
+                    </div>
+                </div>
+                
+                <button class="info-button" id="metropolis-info-button" title="Show Metropolis events">i</button>
+                
+                <div class="info-popup" id="metropolis-popup">
+                    <div class="popup-header">
+                        <div class="popup-title">Metropolis Events</div>
+                        <button class="close-button" id="close-metropolis-popup">×</button>
+                    </div>
+                    
+                    <div class="events-list" id="metropolis-events">
+                        <div class="loading">Loading events...</div>
+                    </div>
+                    
+                    <a class="calendar-link" 
+                       href="https://project-manus.libcal.com/embed_calendar.php?cal_id=11833&w=800&h=600&dv=agendaWeek&st=0&we=1&hl=prev%2Cnext%20today&hc=title&hr=basicWeek%20agendaDay%2CagendaWeek%2Cmonth&hd=dddd%2C%20MMM%20D%2C%20YYYY&hw=MMMM%20D&hm=MMMM%20YYYY&cd=dddd%20M%2FD&cw=ddd%20M%2FD&cm=ddd&ta=h(%3Amm)a&td=h(%3Amm)a&tm=h(%3Amm)a&fh=10%3A00%3A00&mi=10%3A00%3A00&ma=22%3A00%3A00&ts=00%3A30%3A00&eo=1&el=0&hf=1&sp=1&c1=%23000000&c2=%23000000&c3=%23F3F3F3&c4=%23D0D0D0&c5=%23000000&audience=&cam=&cat=39906-39913-46217-48646-47254-47249-47251&tar=0&set=1"
+                       target="_blank">
+                        View Full Calendar
+                    </a>
+                </div>
+            </div>
+            
+            <!-- The Deep Card -->
+            <div class="venue-card deep-card">
+                <div class="status-display" id="deep-status">
+                    <div class="venue-name">The Deep</div>
+                    <div class="main-status loading" id="deep-main-status">Loading...</div>
+                    <div class="operating-hours">
+                        <div class="hours-title">Operating Hours:</div>
+                        <div class="hours-row">Mon-Fri: 10am - 10pm</div>
+                        <div class="hours-row">Sat: 10am - 6pm</div>
+                        <div class="hours-row">Sun: Closed</div>
+                    </div>
+                </div>
+                
+                <button class="info-button" id="deep-info-button" title="Show The Deep events">i</button>
+                
+                <div class="info-popup" id="deep-popup">
+                    <div class="popup-header">
+                        <div class="popup-title">The Deep Events</div>
+                        <button class="close-button" id="close-deep-popup">×</button>
+                    </div>
+                    
+                    <div class="events-list" id="deep-events">
+                        <div class="loading">Loading events...</div>
+                    </div>
+                    
+                    <a class="calendar-link" 
+                       href="https://project-manus.libcal.com/embed_calendar.php?cal_id=9476&w=800&h=600&dv=agendaWeek&st=0&we=1&hl=prev%2Cnext%20today&hc=title&hr=basicWeek%20agendaDay%2CagendaWeek%2Cmonth&hd=dddd%2C%20MMM%20D%2C%20YYYY&hw=MMMM%20D&hm=MMMM%20YYYY&cd=dddd%20M%2FD&cw=ddd%20M%2FD&cm=ddd&ta=h(%3Amm)a&td=h(%3Amm)a&tm=h(%3Amm)a&fh=10%3A00%3A00&mi=10%3A00%3A00&ma=22%3A00%3A00&ts=00%3A30%3A00&eo=1&el=0&hf=1&sp=1&c1=%23000000&c2=%23000000&c3=%23F3F3F3&c4=%23D0D0D0&c5=%23000000&audience=&cam=&cat=39976-48648-47253-47250-47252&tar=0&set=1"
+                       target="_blank">
+                        View Full Calendar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM elements for Metropolis
+        const metropolisStatus = document.getElementById('metropolis-main-status');
+        const metropolisEvents = document.getElementById('metropolis-events');
+        const metropolisInfoBtn = document.getElementById('metropolis-info-button');
+        const metropolisPopup = document.getElementById('metropolis-popup');
+        const closeMetropolisPopup = document.getElementById('close-metropolis-popup');
+        
+        // DOM elements for The Deep
+        const deepStatus = document.getElementById('deep-main-status');
+        const deepEvents = document.getElementById('deep-events');
+        const deepInfoBtn = document.getElementById('deep-info-button');
+        const deepPopup = document.getElementById('deep-popup');
+        const closeDeepPopup = document.getElementById('close-deep-popup');
+        
+        // Show/hide popup events for Metropolis
+        metropolisInfoBtn.addEventListener('click', () => {
+            metropolisPopup.style.display = 'flex';
+        });
+        
+        closeMetropolisPopup.addEventListener('click', () => {
+            metropolisPopup.style.display = 'none';
+        });
+        
+        // Show/hide popup events for The Deep
+        deepInfoBtn.addEventListener('click', () => {
+            deepPopup.style.display = 'flex';
+        });
+        
+        closeDeepPopup.addEventListener('click', () => {
+            deepPopup.style.display = 'none';
+        });
+        
+        // Calendar configurations
+        const calendars = {
+            metropolis: {
+                calId: '11833',
+                categories: '39906-39913-46217-48646-47254-47249-47251',
+                statusElement: metropolisStatus,
+                eventsElement: metropolisEvents,
+                infoButton: metropolisInfoBtn
+            },
+            deep: {
+                calId: '9476',
+                categories: '39976-48648-47253-47250-47252',
+                statusElement: deepStatus,
+                eventsElement: deepEvents,
+                infoButton: deepInfoBtn
+            }
+        };
+        
+        // Build proper API URL with all necessary parameters
+        function buildApiUrl(calId, categories) {
+            // Get current date in YYYY-MM-DD format
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            const dateStr = `${year}-${month}-${day}`;
+            
+            // Calculate date 7 days from now
+            const nextWeek = new Date(today);
+            nextWeek.setDate(today.getDate() + 7);
+            const nextYear = nextWeek.getFullYear();
+            const nextMonth = String(nextWeek.getMonth() + 1).padStart(2, '0');
+            const nextDay = String(nextWeek.getDate()).padStart(2, '0');
+            const nextDateStr = `${nextYear}-${nextMonth}-${nextDay}`;
+            
+            // Base API URL
+            const baseUrl = 'https://project-manus.libcal.com/widget/events/calendar/list';
+            
+            // Add all necessary parameters
+            const params = new URLSearchParams({
+                'c': calId,
+                'sp': '1',
+                'iid': '4513',
+                'cats': categories,
+                'start': dateStr, // Start date
+                'end': nextDateStr, // End date (7 days from now)
+                '_': Date.now() // Cache buster
+            });
+            
+            return `${baseUrl}?${params.toString()}`;
+        }
+        
+        // Function to format time nicely
+        function formatTime(date) {
+            let hours = date.getHours();
+            const minutes = date.getMinutes();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            
+            hours = hours % 12;
+            hours = hours ? hours : 12; // the hour '0' should be '12'
+            
+            const formattedMinutes = minutes < 10 ? '0' + minutes : minutes;
+            
+            return `${hours}:${formattedMinutes} ${ampm}`;
+        }
+        
+        // Function to check if an event is happening right now
+        function isEventNow(start, end) {
+            const now = new Date();
+            return now >= start && now <= end;
+        }
+        
+        // Function to check if event title indicates open hours
+        function isOpenHoursEvent(title) {
+            if (!title) return false;
+            const lowerTitle = title.toLowerCase();
+            // Match variations of "open hours"
+            return lowerTitle.includes("open hour") || 
+                   lowerTitle.includes("open time") || 
+                   (lowerTitle.includes("open") && lowerTitle.includes("hour"));
+        }
+        
+        // Update main status display based on current events
+        function updateMainStatus(currentEvents, statusElement, infoButton) {
+            // Check if any current event indicates open hours
+            let isOpenEvent = false;
+            let hasEvents = currentEvents && currentEvents.length > 0;
+            
+            if (hasEvents) {
+                isOpenEvent = currentEvents.some(event => isOpenHoursEvent(event.title));
+            }
+            
+            // Only check operating hours if no events at all
+            let isOpenHours = false;
+            if (!hasEvents) {
+                isOpenHours = checkOperatingHours(true);
+            }
+            
+            // Update main status display based on the type of current event
+            if (isOpenEvent) {
+                // Open hours event is happening
+                statusElement.textContent = "OPEN";
+                statusElement.className = "main-status status-open";
+            } else if (hasEvents) {
+                // Other event is happening, not open hours
+                statusElement.textContent = "EVENT IN PROGRESS";
+                statusElement.className = "main-status status-event";
+                statusElement.style.color = "#FF9800"; // Orange color for events
+            } else {
+                // No events, use operating hours
+                statusElement.textContent = isOpenHours ? "OPEN" : "CLOSED";
+                statusElement.className = isOpenHours ? "main-status status-open" : "main-status status-closed";
+            }
+            
+            // Show info button if there are events
+            infoButton.style.display = hasEvents ? 'flex' : 'none';
+        }
+        
+        // Function to display current events in the popup
+        function displayCurrentEvents(events, eventsElement, statusElement, infoButton) {
+            eventsElement.innerHTML = '';
+            
+            // Update main status based on events
+            updateMainStatus(events, statusElement, infoButton);
+            
+            if (events.length === 0) {
+                // No events to display in popup
+                const noEventsDiv = document.createElement('div');
+                noEventsDiv.className = "no-events";
+                noEventsDiv.textContent = "No events currently happening";
+                eventsElement.appendChild(noEventsDiv);
+                return;
+            }
+            
+            // Create a header for current events
+            const currentHeader = document.createElement('div');
+            currentHeader.className = 'upcoming-header';
+            currentHeader.textContent = 'Current Events:';
+            eventsElement.appendChild(currentHeader);
+            
+            // Add each current event
+            events.forEach(event => {
+                const eventItem = document.createElement('div');
+                eventItem.className = 'event-item';
+                
+                const eventTitle = document.createElement('div');
+                eventTitle.className = 'event-title';
+                eventTitle.textContent = event.title;
+                
+                const eventTime = document.createElement('div');
+                eventTime.className = 'event-time';
+                eventTime.textContent = `${formatTime(event.start)} - ${formatTime(event.end)}`;
+                
+                eventItem.appendChild(eventTitle);
+                eventItem.appendChild(eventTime);
+                
+                if (event.location) {
+                    const eventLocation = document.createElement('div');
+                    eventLocation.className = 'event-location';
+                    eventLocation.textContent = event.location;
+                    eventItem.appendChild(eventLocation);
+                }
+                
+                eventsElement.appendChild(eventItem);
+            });
+        }
+        
+        // Display upcoming events in the popup
+        function displayUpcomingEvents(events, currentEvents, eventsElement, statusElement, infoButton) {
+            // First update main status based on current events (if any)
+            updateMainStatus(currentEvents, statusElement, infoButton);
+            
+            // If we already have content from current events
+            if (eventsElement.children.length > 0 && !eventsElement.querySelector('.loading')) {
+                // Add a header for upcoming events
+                const upcomingHeader = document.createElement('div');
+                upcomingHeader.className = 'upcoming-header';
+                upcomingHeader.textContent = 'Upcoming Events:';
+                eventsElement.appendChild(upcomingHeader);
+            } else {
+                // No current events, clear and start fresh
+                eventsElement.innerHTML = '';
+                
+                // Add a header for upcoming events
+                const upcomingHeader = document.createElement('div');
+                upcomingHeader.className = 'upcoming-header';
+                upcomingHeader.textContent = 'Upcoming Events:';
+                eventsElement.appendChild(upcomingHeader);
+            }
+            
+            // Add each upcoming event
+            events.forEach(event => {
+                const eventItem = document.createElement('div');
+                eventItem.className = 'event-item upcoming-event';
+                
+                const eventTitle = document.createElement('div');
+                eventTitle.className = 'event-title';
+                eventTitle.textContent = event.title;
+                
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                tomorrow.setHours(0, 0, 0, 0);
+                
+                const dayAfterTomorrow = new Date();
+                dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2);
+                dayAfterTomorrow.setHours(0, 0, 0, 0);
+                
+                const eventDate = new Date(event.start);
+                let dateDisplay = '';
+                
+                if (eventDate.toDateString() === new Date().toDateString()) {
+                    dateDisplay = 'Today';
+                } else if (eventDate < tomorrow) {
+                    dateDisplay = 'Tomorrow';
+                } else if (eventDate < dayAfterTomorrow) {
+                    dateDisplay = 'Day after tomorrow';
+                } else {
+                    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                    dateDisplay = days[eventDate.getDay()];
+                }
+                
+                const eventTime = document.createElement('div');
+                eventTime.className = 'event-time';
+                eventTime.textContent = `${dateDisplay}, ${formatTime(event.start)} - ${formatTime(event.end)}`;
+                
+                eventItem.appendChild(eventTitle);
+                eventItem.appendChild(eventTime);
+                
+                if (event.location) {
+                    const eventLocation = document.createElement('div');
+                    eventLocation.className = 'event-location';
+                    eventLocation.textContent = event.location;
+                    eventItem.appendChild(eventLocation);
+                }
+                
+                eventsElement.appendChild(eventItem);
+            });
+        }
+        
+        // Function to check if current time is within operating hours
+        // Returns true if open, false if closed
+        function checkOperatingHours(returnValue = false) {
+            const now = new Date();
+            const hours = now.getHours();
+            const day = now.getDay(); // 0 (Sunday) to 6 (Saturday)
+            
+            let isOpen = false;
+            
+            // Check if within operating hours based on day and time
+            if (day >= 1 && day <= 5) {
+                // Weekdays: Monday to Friday
+                if (hours >= 10 && hours < 22) {
+                    isOpen = true;
+                }
+            } else if (day === 6) {
+                // Saturday
+                if (hours >= 10 && hours < 18) {
+                    isOpen = true;
+                }
+            }
+            
+            // If just returning the value, do that
+            if (returnValue) {
+                return isOpen;
+            }
+            
+            // Otherwise update status for both venues
+            updateClosedStatuses(isOpen);
+        }
+        
+        // Update statuses when closed
+        function updateClosedStatuses(isOpen) {
+            // Metropolis
+            metropolisStatus.textContent = isOpen ? "OPEN" : "CLOSED";
+            metropolisStatus.className = isOpen ? "main-status status-open" : "main-status status-closed";
+            metropolisInfoBtn.style.display = 'none';
+            
+            // The Deep
+            deepStatus.textContent = isOpen ? "OPEN" : "CLOSED";
+            deepStatus.className = isOpen ? "main-status status-open" : "main-status status-closed";
+            deepInfoBtn.style.display = 'none';
+        }
+        
+        // Create fallback events when all API fetches fail for a venue
+        function createFallbackEvents(venue) {
+            console.log(`Creating fallback events for ${venue}`);
+            const now = new Date();
+            const day = now.getDay(); // 0 (Sunday) to 6 (Saturday)
+            
+            // Check if we're in operating hours
+            let isOpen = false;
+            
+            if (day >= 1 && day <= 5) { // Monday to Friday
+                const hours = now.getHours();
+                isOpen = (hours >= 10 && hours < 22);
+            } else if (day === 6) { // Saturday
+                const hours = now.getHours();
+                isOpen = (hours >= 10 && hours < 18);
+            }
+            
+            const calConfig = calendars[venue];
+            
+            if (isOpen) {
+                // Create a generic "Open Hours" event
+                const mockEvent = {
+                    title: "Open Hours",
+                    start: new Date(now.setHours(10, 0, 0, 0)),
+                    end: new Date(now.setHours(day === 6 ? 18 : 22, 0, 0, 0)),
+                    location: venue === 'metropolis' ? "MAD Metropolis" : "The Deep"
+                };
+                
+                // Update displays with mock event
+                displayCurrentEvents([mockEvent], calConfig.eventsElement, calConfig.statusElement, calConfig.infoButton);
+            } else {
+                // Just show the closed status
+                calConfig.statusElement.textContent = "CLOSED";
+                calConfig.statusElement.className = "main-status status-closed";
+                calConfig.infoButton.style.display = 'none';
+                calConfig.eventsElement.innerHTML = '<div class="no-events">No events currently happening</div>';
+            }
+        }
+        
+        // Function to fetch events from the API for a specific venue
+        async function fetchEvents(venue) {
+            const calConfig = calendars[venue];
+            const apiUrl = buildApiUrl(calConfig.calId, calConfig.categories);
+            
+            console.log(`Using API URL for ${venue}:`, apiUrl);
+            
+            try {
+                // Use a more reliable CORS proxy for the API call
+                const corsProxy = 'https://api.allorigins.win/raw?url=';
+                const encodedUrl = encodeURIComponent(apiUrl);
+                
+                // Show loading in main status
+                calConfig.statusElement.textContent = "Loading...";
+                calConfig.statusElement.className = "main-status loading";
+                
+                // Try to fetch from the API through a CORS proxy
+                const response = await fetch(corsProxy + encodedUrl);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log(`Successfully fetched events for ${venue}:`, data);
+                    processEvents(data, venue);
+                } else {
+                    throw new Error(`API returned status: ${response.status}`);
+                }
+            } catch (directError) {
+                console.error(`Direct API error for ${venue}:`, directError);
+                
+                // If first proxy fails, try a different approach
+                try {
+                    // Create an alternative URL based on the source code analysis
+                    const alternateCorsProxy = 'https://cors-anywhere.herokuapp.com/';
+                    const directCalUrl = apiUrl;
+                    
+                    console.log(`Trying alternate URL with different proxy for ${venue}`);
+                    const altResponse = await fetch(alternateCorsProxy + directCalUrl);
+                    
+                    if (altResponse.ok) {
+                        const altData = await altResponse.json();
+                        console.log(`Successfully fetched events with alternate method for ${venue}:`, altData);
+                        processEvents(altData, venue);
+                        return;
+                    } else {
+                        console.error(`Alternate URL fetch failed for ${venue}:`, altResponse.status);
+                        throw new Error(`Alternate URL fetch failed for ${venue}`);
+                    }
+                } catch (alternateError) {
+                    console.error(`Alternate fetch error for ${venue}:`, alternateError);
+                    
+                    // Final fallback - create some mock events based on operating hours
+                    createFallbackEvents(venue);
+                }
+            }
+        }
+        
+        // Process events from the API response
+        function processEvents(data, venue) {
+            console.log(`Processing events for ${venue}:`, data);
+            const calConfig = calendars[venue];
+            
+            // Check if data has events
+            if (!data || !Array.isArray(data) || data.length === 0) {
+                console.log(`No events found in API response for ${venue}, using fallback`);
+                createFallbackEvents(venue);
+                return;
+            }
+            
+            // Find current events
+            const currentEvents = [];
+            const now = new Date();
+            const upcoming = [];
+            
+            data.forEach(event => {
+                // Parse start and end times
+                const start = new Date(event.start);
+                const end = new Date(event.end);
+                
+                console.log(`Event for ${venue}: ${event.title}, Start: ${start.toLocaleString()}, End: ${end.toLocaleString()}, Now: ${now.toLocaleString()}`);
+                
+                // Check if event is happening now
+                if (isEventNow(start, end)) {
+                    console.log(`Current event for ${venue}: ${event.title}`);
+                    currentEvents.push({
+                        title: event.title,
+                        start: start,
+                        end: end,
+                        location: event.extendedProps && event.extendedProps.location ? event.extendedProps.location : null
+                    });
+                } else if (start > now && upcoming.length < 3) {
+                    // Track upcoming events (limit to 3)
+                    upcoming.push({
+                        title: event.title,
+                        start: start,
+                        end: end,
+                        location: event.extendedProps && event.extendedProps.location ? event.extendedProps.location : null
+                    });
+                }
+            });
+            
+            // Display current events in popup
+            displayCurrentEvents(currentEvents, calConfig.eventsElement, calConfig.statusElement, calConfig.infoButton);
+            
+            // If there are upcoming events, add them to the popup
+            if (upcoming.length > 0) {
+                displayUpcomingEvents(upcoming, currentEvents, calConfig.eventsElement, calConfig.statusElement, calConfig.infoButton);
+            }
+        }
+        
+        // Fetch events initially for both venues
+        function initializeCalendars() {
+            fetchEvents('metropolis');
+            fetchEvents('deep');
+        }
+        
+        // Start fetching events
+        initializeCalendars();
+        
+        // Refresh every 5 minutes
+        setInterval(initializeCalendars, 5 * 60 * 1000);
+        
+        // Also refresh when window gets focus
+        window.addEventListener('focus', initializeCalendars);
+    </script>
+</body>
+</html> 
+</html> 
