@@ -22,150 +22,55 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-        
-        .analog-clock {
             position: relative;
-            width: 80%;
-            max-width: 250px;
-            aspect-ratio: 1;
-            background-color: #f8f9fa;
-            border-radius: 50%;
-            box-shadow: 
-                0 14px 28px rgba(0,0,0,0.1), 
-                0 10px 10px rgba(0,0,0,0.05),
-                inset 0 0 20px rgba(0,0,0,0.05);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-bottom: 20px;
         }
         
-        .center-dot {
-            position: absolute;
-            width: 12px;
-            height: 12px;
-            background-color: #333;
-            border-radius: 50%;
-            z-index: 10;
-        }
-        
-        .hour-marks {
-            position: absolute;
+        .time-display {
             width: 100%;
-            height: 100%;
-            padding: 10%;
-            box-sizing: border-box;
-        }
-        
-        .hour-mark {
-            position: absolute;
-            width: 4px;
-            height: 12px;
-            background-color: #555;
-            left: 50%;
-            margin-left: -2px;
-            transform-origin: 50% 100%;
-            border-radius: 2px;
-        }
-        
-        .minute-mark {
-            position: absolute;
-            width: 2px;
-            height: 6px;
-            background-color: #888;
-            left: 50%;
-            margin-left: -1px;
-            transform-origin: 50% 100%;
-            border-radius: 1px;
-        }
-        
-        .hour-hand, .minute-hand, .second-hand {
-            position: absolute;
-            transform-origin: bottom center;
-            border-radius: 4px;
-        }
-        
-        .hour-hand {
-            width: 6px;
-            height: 25%;
-            background-color: #333;
-            z-index: 7;
-        }
-        
-        .minute-hand {
-            width: 4px;
-            height: 38%;
-            background-color: #555;
-            z-index: 8;
-        }
-        
-        .second-hand {
-            width: 2px;
-            height: 45%;
-            background-color: #f44336;
-            z-index: 9;
-        }
-        
-        .digital-clock {
-            font-size: 2rem;
+            text-align: center;
             font-weight: bold;
             color: #333;
-            background-color: rgba(255, 255, 255, 0.8);
-            padding: 8px 16px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            line-height: 0.9;
+            margin: 0;
+            padding: 0;
+            position: relative;
         }
         
         .date-display {
-            margin-top: 10px;
-            font-size: 1rem;
+            width: 100%;
+            text-align: center;
             color: #555;
+            line-height: 1;
+            margin: 0;
+            padding: 0;
+            position: relative;
+        }
+        
+        .horizontal-layout {
+            flex-direction: row;
+            justify-content: space-around;
+        }
+        
+        .horizontal-layout .time-display {
+            width: auto;
+            margin-right: 10px;
+        }
+        
+        .horizontal-layout .date-display {
+            width: auto;
         }
     </style>
 </head>
 <body>
-    <div class="clock-container">
-        <div class="analog-clock">
-            <div class="hour-marks" id="hour-marks"></div>
-            <div class="hour-hand" id="hour-hand"></div>
-            <div class="minute-hand" id="minute-hand"></div>
-            <div class="second-hand" id="second-hand"></div>
-            <div class="center-dot"></div>
-        </div>
-        
-        <div class="digital-clock" id="digital-clock">00:00:00</div>
+    <div class="clock-container" id="clock-container">
+        <div class="time-display" id="time-display">00:00:00</div>
         <div class="date-display" id="date-display">Monday, January 1</div>
     </div>
 
     <script>
-        // Create hour and minute markers
-        const hourMarksContainer = document.getElementById('hour-marks');
-        
-        // Create hour marks
-        for (let i = 0; i < 12; i++) {
-            const hourMark = document.createElement('div');
-            hourMark.className = 'hour-mark';
-            hourMark.style.transform = `rotate(${i * 30}deg) translateY(-100%)`;
-            hourMarksContainer.appendChild(hourMark);
-            
-            // Create minute marks for each hour section
-            for (let j = 1; j <= 4; j++) {
-                if (j === 0) continue;
-                const minuteMark = document.createElement('div');
-                minuteMark.className = 'minute-mark';
-                minuteMark.style.transform = `rotate(${i * 30 + j * 6}deg) translateY(-100%)`;
-                hourMarksContainer.appendChild(minuteMark);
-            }
-        }
-        
-        // Clock hands
-        const hourHand = document.getElementById('hour-hand');
-        const minuteHand = document.getElementById('minute-hand');
-        const secondHand = document.getElementById('second-hand');
-        const digitalClock = document.getElementById('digital-clock');
+        // DOM elements
+        const clockContainer = document.getElementById('clock-container');
+        const timeDisplay = document.getElementById('time-display');
         const dateDisplay = document.getElementById('date-display');
         
         // Months and days names
@@ -179,45 +84,104 @@
             'Thursday', 'Friday', 'Saturday'
         ];
         
+        // Format date based on container height
+        function formatDate(date) {
+            const day = days[date.getDay()];
+            const dayDate = date.getDate();
+            const month = months[date.getMonth()];
+            
+            if (clockContainer.clientHeight < 60) {
+                return `${day.substring(0, 3)} ${dayDate}`;
+            } else if (clockContainer.clientHeight < 120) {
+                return `${day.substring(0, 3)}, ${month.substring(0, 3)} ${dayDate}`;
+            } else {
+                return `${day}, ${month} ${dayDate}`;
+            }
+        }
+        
+        // Update clock time and date
         function updateClock() {
             const now = new Date();
             
-            const hours = now.getHours();
-            const minutes = now.getMinutes();
-            const seconds = now.getSeconds();
-            const milliseconds = now.getMilliseconds();
+            const hours = now.getHours().toString().padStart(2, '0');
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            const seconds = now.getSeconds().toString().padStart(2, '0');
             
-            // Analog clock
-            // Calculate angles for hands
-            const secondAngle = (seconds + milliseconds / 1000) * 6; // 6 degrees per second
-            const minuteAngle = (minutes + seconds / 60) * 6; // 6 degrees per minute
-            const hourAngle = ((hours % 12) + minutes / 60) * 30; // 30 degrees per hour
+            timeDisplay.textContent = `${hours}:${minutes}:${seconds}`;
+            dateDisplay.textContent = formatDate(now);
             
-            // Apply rotations
-            secondHand.style.transform = `translateX(-50%) rotate(${secondAngle}deg)`;
-            minuteHand.style.transform = `translateX(-50%) rotate(${minuteAngle}deg)`;
-            hourHand.style.transform = `translateX(-50%) rotate(${hourAngle}deg)`;
+            // Adjust sizes after updating content
+            adjustSizes();
             
-            // Digital clock
-            const formattedHours = hours.toString().padStart(2, '0');
-            const formattedMinutes = minutes.toString().padStart(2, '0');
-            const formattedSeconds = seconds.toString().padStart(2, '0');
-            
-            digitalClock.textContent = `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
-            
-            // Date
-            const day = days[now.getDay()];
-            const date = now.getDate();
-            const month = months[now.getMonth()];
-            
-            dateDisplay.textContent = `${day}, ${month} ${date}`;
-            
-            // Update every frame for smooth animation
-            requestAnimationFrame(updateClock);
+            // Update every second
+            setTimeout(updateClock, 1000);
         }
+        
+        // Dynamically adjust font sizes to maximize space utilization
+        function adjustSizes() {
+            const containerWidth = clockContainer.clientWidth;
+            const containerHeight = clockContainer.clientHeight;
+            
+            // Choose layout based on dimensions
+            if (containerHeight < 80) {
+                clockContainer.classList.add('horizontal-layout');
+            } else {
+                clockContainer.classList.remove('horizontal-layout');
+            }
+            
+            // Calculate optimal font sizes
+            if (clockContainer.classList.contains('horizontal-layout')) {
+                // Horizontal layout (side by side)
+                const maxTimeWidth = containerWidth * 0.65;
+                const maxDateWidth = containerWidth * 0.35;
+                
+                // Reset font sizes to measure approximate size ratios
+                timeDisplay.style.fontSize = '100px';
+                dateDisplay.style.fontSize = '50px';
+                
+                // Calculate scaling factors
+                const timeWidthRatio = maxTimeWidth / timeDisplay.offsetWidth;
+                const dateWidthRatio = maxDateWidth / dateDisplay.offsetWidth;
+                const heightRatio = containerHeight / Math.max(timeDisplay.offsetHeight, dateDisplay.offsetHeight);
+                
+                // Apply the most constraining ratio
+                const timeRatio = Math.min(timeWidthRatio, heightRatio);
+                const dateRatio = Math.min(dateWidthRatio, heightRatio);
+                
+                timeDisplay.style.fontSize = `${Math.floor(100 * timeRatio)}px`;
+                dateDisplay.style.fontSize = `${Math.floor(50 * dateRatio)}px`;
+            } else {
+                // Vertical layout (stacked)
+                const maxTimeHeight = containerHeight * 0.65;
+                const maxDateHeight = containerHeight * 0.35;
+                
+                // Start with large font sizes
+                timeDisplay.style.fontSize = '100px';
+                dateDisplay.style.fontSize = '50px';
+                
+                // Calculate both width and height constraints
+                const timeWidthRatio = containerWidth / timeDisplay.offsetWidth;
+                const dateWidthRatio = containerWidth / dateDisplay.offsetWidth;
+                const timeHeightRatio = maxTimeHeight / timeDisplay.offsetHeight;
+                const dateHeightRatio = maxDateHeight / dateDisplay.offsetHeight;
+                
+                // Apply the most constraining ratio
+                const timeRatio = Math.min(timeWidthRatio, timeHeightRatio);
+                const dateRatio = Math.min(dateWidthRatio, dateHeightRatio);
+                
+                timeDisplay.style.fontSize = `${Math.floor(100 * timeRatio)}px`;
+                dateDisplay.style.fontSize = `${Math.floor(50 * dateRatio)}px`;
+            }
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', adjustSizes);
         
         // Start the clock
         updateClock();
+        
+        // Initial size adjustment (after a slight delay to ensure rendering)
+        setTimeout(adjustSizes, 50);
     </script>
 </body>
 </html>
