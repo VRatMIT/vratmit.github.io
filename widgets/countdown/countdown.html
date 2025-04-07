@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reality Hack Countdown</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            background-color: transparent;
+        }
+        
+        .countdown-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        
+        .title {
+            width: 100%;
+            text-align: center;
+            color: #333;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .days-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            min-height: 0;
+        }
+        
+        .days-number {
+            font-weight: bold;
+            color: #2c3e50;
+            line-height: 1;
+            margin: 0;
+            padding: 0;
+            position: relative;
+            text-align: center;
+        }
+        
+        .days-label {
+            color: #7f8c8d;
+            margin-top: 2px;
+        }
+        
+        .date-display {
+            color: #95a5a6;
+            margin-top: 5px;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .days-number {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="countdown-container" id="countdown-container">
+        <div class="title">Number of days until Reality Hack 2026</div>
+        <div class="days-container">
+            <div class="days-number" id="days-number">--</div>
+            <div class="days-label">days</div>
+        </div>
+        <div class="date-display" id="date-display">January 10, 2026</div>
+    </div>
+
+    <script>
+        // DOM elements
+        const daysNumber = document.getElementById('days-number');
+        const dateDisplay = document.getElementById('date-display');
+        
+        // Target date (January 10, 2026)
+        const targetDate = new Date('2026-01-10T00:00:00');
+        
+        // Update countdown
+        function updateCountdown() {
+            const now = new Date();
+            const timeDiff = targetDate - now;
+            
+            // Calculate days
+            const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+            
+            // Update display
+            daysNumber.textContent = days;
+            
+            // Format date for display
+            const options = { year: 'numeric', month: 'long', day: 'numeric' };
+            dateDisplay.textContent = targetDate.toLocaleDateString('en-US', options);
+            
+            // Adjust sizes
+            adjustSizes();
+        }
+        
+        // Dynamically adjust font sizes
+        function adjustSizes() {
+            const container = document.getElementById('countdown-container');
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+            
+            // Calculate base font size based on container dimensions
+            const baseSize = Math.min(containerWidth, containerHeight) * 0.1;
+            
+            // Adjust title size
+            const title = document.querySelector('.title');
+            title.style.fontSize = `${Math.floor(baseSize * 0.8)}px`;
+            
+            // Adjust days number size
+            const daysNumber = document.querySelector('.days-number');
+            daysNumber.style.fontSize = `${Math.floor(baseSize * 2)}px`;
+            
+            // Adjust days label size
+            const daysLabel = document.querySelector('.days-label');
+            daysLabel.style.fontSize = `${Math.floor(baseSize * 0.6)}px`;
+            
+            // Adjust date size
+            const dateDisplay = document.querySelector('.date-display');
+            dateDisplay.style.fontSize = `${Math.floor(baseSize * 0.7)}px`;
+            
+            // Ensure the days number fits within the container
+            const daysContainer = document.querySelector('.days-container');
+            const daysNumberHeight = daysNumber.offsetHeight;
+            const containerAvailableHeight = containerHeight * 0.6;
+            
+            if (daysNumberHeight > containerAvailableHeight) {
+                const scaleFactor = containerAvailableHeight / daysNumberHeight;
+                daysNumber.style.fontSize = `${Math.floor(parseFloat(daysNumber.style.fontSize) * scaleFactor)}px`;
+            }
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', adjustSizes);
+        
+        // Initial update and size adjustment
+        updateCountdown();
+        setTimeout(adjustSizes, 50);
+        
+        // Update countdown every minute
+        setInterval(updateCountdown, 60000);
+    </script>
+</body>
+</html> 
