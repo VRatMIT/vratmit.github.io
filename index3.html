@@ -788,16 +788,30 @@
         // Initialize on page load
         window.addEventListener('load', initDashboard);
 
-        // Function to inject dark mode CSS into an iframe
-        function injectDarkModeCSS(iframe) {
+        // Function to inject selective dark mode CSS into an iframe
+        function injectSelectiveDarkModeCSS(iframe) {
             const darkCSS = `
                 html, body {
                     background-color: #1e1e1e !important;
                     color: #ffffff !important;
                 }
-                * {
+
+                /* Apply background and text color only to elements that explicitly define defaults */
+                body, div, p, span, header, footer, section, article, aside, main {
                     background-color: transparent !important;
                     color: inherit !important;
+                }
+
+                /* Preserve original colors for elements explicitly styled by widget authors */
+                a, button, input, select, textarea, svg, img, canvas, .colored, [style*="color"] {
+                    background-color: initial !important;
+                    color: initial !important;
+                }
+
+                /* Optionally, ensure input fields and buttons are still readable */
+                input, select, textarea, button {
+                    background-color: #333 !important;
+                    color: #fff !important;
                     border-color: #555 !important;
                 }
             `;
@@ -812,13 +826,13 @@
             }
         }
 
-        // Observe newly added windows and inject CSS
+        // Observe newly added windows and inject CSS selectively
         const observer = new MutationObserver(mutations => {
             mutations.forEach(mutation => {
                 mutation.addedNodes.forEach(node => {
                     if (node.classList && node.classList.contains('window')) {
                         const iframe = node.querySelector('iframe');
-                        iframe.onload = () => injectDarkModeCSS(iframe);
+                        iframe.onload = () => injectSelectiveDarkModeCSS(iframe);
                     }
                 });
             });
@@ -829,8 +843,9 @@
 
         // Initial injection for existing windows
         document.querySelectorAll('.window-content iframe').forEach(iframe => {
-            iframe.onload = () => injectDarkModeCSS(iframe);
+            iframe.onload = () => injectSelectiveDarkModeCSS(iframe);
         });
+
 
     </script>
 </body>
