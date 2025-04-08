@@ -40,10 +40,27 @@
             min-width: 250px;
             min-height: 200px;
             transition: box-shadow 0.2s;
+            transform-origin: center;
+            will-change: transform;
+            backface-visibility: hidden;
         }
         
         .window.active {
             box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+        
+        .window-content {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+            transform-origin: center;
+        }
+        
+        .window-content iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            transform-origin: center;
         }
         
         .window-header {
@@ -55,23 +72,13 @@
             align-items: center;
             cursor: move;
             user-select: none;
-        }
-        
-        .window-content {
-            flex: 1;
-            overflow: hidden;
-            position: relative;
-        }
-        
-        .window-content iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
+            transform-origin: center;
         }
         
         .window-controls {
             display: flex;
-            gap: 8px;
+            gap: 5px;
+            margin-right: 10px;
         }
         
         .window-button {
@@ -81,16 +88,16 @@
             cursor: pointer;
         }
         
-        .minimize-button {
-            background-color: #f1c40f;
+        .close-button {
+            background: #ff5f56;
         }
         
         .maximize-button {
-            background-color: #27ae60;
+            background: #ffbd2e;
         }
         
-        .close-button {
-            background-color: #e74c3c;
+        .minimize-button {
+            background: #27c93f;
         }
         
         .resize-handle {
@@ -294,6 +301,7 @@
         </div>
     </div>
 
+    <script src="js/window-physics.js"></script>
     <script>
         // Dashboard state
         const state = {
@@ -323,11 +331,22 @@
         function addWindow(url, title, position = null) {
             // Generate default position if not provided
             if (!position) {
+                // Calculate grid position to prevent overlap
+                const gridSize = 300; // Size of each grid cell
+                const padding = 20; // Padding between windows
+                const maxX = Math.floor((window.innerWidth - gridSize) / gridSize);
+                const maxY = Math.floor((window.innerHeight - gridSize) / gridSize);
+                
+                // Calculate position based on window count
+                const index = state.windows.length;
+                const gridX = index % maxX;
+                const gridY = Math.floor(index / maxX) % maxY;
+                
                 position = {
-                    x: 50 + (state.windows.length * 30) % 200,
-                    y: 50 + (state.windows.length * 30) % 150,
-                    width: 400,
-                    height: 300
+                    x: padding + (gridX * gridSize),
+                    y: padding + (gridY * gridSize),
+                    width: 300, // Smaller default width
+                    height: 250 // Smaller default height
                 };
             }
             
@@ -385,6 +404,9 @@
             
             // Add to windows array
             state.windows.push(window);
+            
+            // Add to physics system
+            windowPhysics.addWindow(windowEl);
             
             // Setup window events
             setupWindowEvents(window);
@@ -492,6 +514,9 @@
             // Update window object
             state.draggingWindow.position.x = newLeft;
             state.draggingWindow.position.y = newTop;
+            
+            // Temporarily remove from physics system while dragging
+            windowPhysics.removeWindow(windowEl);
         }
         
         // Handle drag end
@@ -500,6 +525,9 @@
             
             const windowEl = state.draggingWindow.element;
             windowEl.classList.remove('dragging');
+            
+            // Re-add to physics system after dragging
+            windowPhysics.addWindow(windowEl);
             
             // Clean up
             state.draggingWindow = null;
@@ -668,6 +696,9 @@
             
             if (windowIndex !== -1) {
                 const window = state.windows[windowIndex];
+                
+                // Remove from physics system
+                windowPhysics.removeWindow(window.element);
                 
                 // Remove from DOM
                 window.element.remove();
