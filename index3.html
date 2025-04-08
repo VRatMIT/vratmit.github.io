@@ -785,6 +785,51 @@
         
         // Initialize on page load
         window.addEventListener('load', initDashboard);
+
+        // Function to inject dark mode CSS into an iframe
+        function injectDarkModeCSS(iframe) {
+            const darkCSS = `
+                html, body {
+                    background-color: #1e1e1e !important;
+                    color: #ffffff !important;
+                }
+                * {
+                    background-color: transparent !important;
+                    color: inherit !important;
+                    border-color: #555 !important;
+                }
+            `;
+
+            try {
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                const style = iframeDoc.createElement('style');
+                style.textContent = darkCSS;
+                iframeDoc.head.appendChild(style);
+            } catch (e) {
+                console.warn('Could not inject CSS into iframe:', e);
+            }
+        }
+
+        // Observe newly added windows and inject CSS
+        const observer = new MutationObserver(mutations => {
+            mutations.forEach(mutation => {
+                mutation.addedNodes.forEach(node => {
+                    if (node.classList && node.classList.contains('window')) {
+                        const iframe = node.querySelector('iframe');
+                        iframe.onload = () => injectDarkModeCSS(iframe);
+                    }
+                });
+            });
+        });
+
+        // Observe dashboard container for new windows
+        observer.observe(document.getElementById('dashboard'), { childList: true });
+
+        // Initial injection for existing windows
+        document.querySelectorAll('.window-content iframe').forEach(iframe => {
+            iframe.onload = () => injectDarkModeCSS(iframe);
+        });
+
     </script>
 </body>
 </html> 
