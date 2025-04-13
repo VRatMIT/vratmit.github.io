@@ -507,34 +507,60 @@
         }
         
         // Add a new panel
-        function addPanel(url, title, targetCell = null) {
+        function addPanel(url, title, startCell, id = null, endCell = null, columnWidths = null, rowHeights = null) {
             // If no target cell provided, find an empty one or expand grid
-            if (!targetCell) {
-                targetCell = findEmptyCell();
-                if (!targetCell) {
+            if (!startCell) {
+                startCell = findEmptyCell();
+                if (!startCell) {
                     expandGridIfNeeded();
-                    targetCell = findEmptyCell();
+                    startCell = findEmptyCell();
                 }
             }
             
-            if (!targetCell || targetCell.occupied) {
+            if (!startCell || startCell.occupied) {
                 console.error('No empty cell available for new panel');
                 return null;
             }
             
-            const panelId = `panel-${state.nextPanelId++}`;
-            
             // Create panel element
             const panelEl = document.createElement('div');
             panelEl.className = 'panel';
+            
+            const panelId = id || `panel-${state.nextPanelId++}`;
             panelEl.id = panelId;
-            panelEl.style.gridColumn = `${targetCell.x + 1}`;
-            panelEl.style.gridRow = `${targetCell.y + 1}`;
+            
+            // Find end cell if not provided
+            if (!endCell) {
+                endCell = startCell;
+            }
+            
+            // Ensure start cell is top-left and end cell is bottom-right
+            const x1 = Math.min(startCell.x, endCell.x);
+            const y1 = Math.min(startCell.y, endCell.y);
+            const x2 = Math.max(startCell.x, endCell.x);
+            const y2 = Math.max(startCell.y, endCell.y);
+            
+            // Update grid cell occupancy
+            for (let y = y1; y <= y2; y++) {
+                for (let x = x1; x <= x2; x++) {
+                    const cell = getCell(x, y);
+                    if (cell) {
+                        cell.occupied = true;
+                        cell.panelId = panelId;
+                    }
+                }
+            }
+            
+            // Set panel position and size
+            panelEl.style.gridColumnStart = x1 + 1;
+            panelEl.style.gridColumnEnd = x2 + 2;
+            panelEl.style.gridRowStart = y1 + 1;
+            panelEl.style.gridRowEnd = y2 + 2;
             
             // Create panel content
             panelEl.innerHTML = `
                 <div class="panel-header">
-                    <span>${title || `Panel ${panelId.split('-')[1]}`}</span>
+                    <span class="panel-title">${title || `Panel ${panelId.split('-')[1]}`}</span>
                     <span class="close-button">✕</span>
                 </div>
                 <div class="panel-content">
@@ -549,20 +575,24 @@
             // Add to DOM
             dashboardEl.appendChild(panelEl);
             
-            // Mark cell as occupied
-            targetCell.occupied = true;
-            targetCell.panelId = panelId;
+            // Calculate default column widths and row heights
+            if (!columnWidths) {
+                columnWidths = Array(x2 - x1 + 1).fill(100 / (x2 - x1 + 1));
+            }
+            if (!rowHeights) {
+                rowHeights = Array(y2 - y1 + 1).fill(100 / (y2 - y1 + 1));
+            }
             
             // Create panel object
             const panel = {
                 id: panelId,
+                element: panelEl,
                 url,
                 title: title || `Panel ${panelId.split('-')[1]}`,
-                element: panelEl,
-                cell: {
-                    x: targetCell.x,
-                    y: targetCell.y
-                }
+                startCell: getCell(x1, y1),
+                endCell: getCell(x2, y2),
+                columnWidths,
+                rowHeights
             };
             
             // Add to panels array
@@ -573,6 +603,9 @@
             
             // Update grid overlay
             updateGridOverlay();
+            
+            // Save dashboard state
+            saveDashboardState();
             
             return panel;
         }
@@ -623,7 +656,7 @@
                     e.stopPropagation();
                     
                     state.resizingPanel = panel;
-                    state.resizeDirection = handle.classList[1]; // n, s, e, w
+                    state.resizeDirection = handle.dataset.direction; // ne, se, sw, nw
                     state.resizeStartCell = { ...panel.cell };
                     
                     panelEl.classList.add('resizing');
@@ -645,11 +678,20 @@
             if (panelIndex !== -1) {
                 const panel = state.panels[panelIndex];
                 
-                // Free up grid cell
-                const cell = state.grid.cells.find(cell => cell.panelId === panelId);
-                if (cell) {
-                    cell.occupied = false;
-                    cell.panelId = null;
+                // Clear occupied cells
+                const x1 = panel.startCell.x;
+                const y1 = panel.startCell.y;
+                const x2 = panel.endCell.x;
+                const y2 = panel.endCell.y;
+                
+                for (let y = y1; y <= y2; y++) {
+                    for (let x = x1; x <= x2; x++) {
+                        const cell = getCell(x, y);
+                        if (cell && cell.panelId === panelId) {
+                            cell.occupied = false;
+                            cell.panelId = null;
+                        }
+                    }
                 }
                 
                 // Remove from DOM
@@ -660,6 +702,12 @@
                 
                 // Update grid overlay
                 updateGridOverlay();
+                
+                // Redraw drag handles
+                createDragHandles();
+                
+                // Save dashboard state
+                saveDashboardState();
             }
         }
         
@@ -693,7 +741,7 @@
         }
         
         // Handle drag end
-        function handleDragEnd() {
+        function handleDragEnd(e) {
             if (!state.draggingPanel) return;
             
             const panelEl = state.draggingPanel.element;
@@ -767,71 +815,81 @@
             
             // Handle different resize directions
             switch (state.resizeDirection) {
-                case 'n':
-                    // Can only resize up
-                    if (currentCell.y < state.resizeStartCell.y) {
+                case 'ne':
+                    // Can only resize up and left
+                    if (currentCell.x < state.resizeStartCell.x && currentCell.y < state.resizeStartCell.y) {
+                        newX = currentCell.x;
                         newY = currentCell.y;
                     }
                     break;
-                case 's':
-                    // Only works if cells below are empty
-                    if (currentCell.y > state.resizeStartCell.y) {
-                        // Check if cells are empty
-                        let canResize = true;
-                        for (let y = state.resizeStartCell.y + 1; y <= currentCell.y; y++) {
-                            if (!isCellEmpty(state.resizeStartCell.x, y)) {
-                                canResize = false;
-                                break;
-                            }
-                        }
-                        
-                        if (canResize) {
-                            // Highlight target cells
-                            for (let y = state.resizeStartCell.y + 1; y <= currentCell.y; y++) {
-                                const cellEl = document.querySelector(`.grid-cell[data-x="${state.resizeStartCell.x}"][data-y="${y}"]`);
-                                if (cellEl) cellEl.classList.add('highlight');
-                            }
-                            
-                            state.resizeEndCell = { x: state.resizeStartCell.x, y: currentCell.y };
-                        }
-                    }
-                    break;
-                case 'e':
-                    // Only works if cells to the right are empty
-                    if (currentCell.x > state.resizeStartCell.x) {
+                case 'se':
+                    // Only works if cells below and to the right are empty
+                    if (currentCell.x > state.resizeStartCell.x && currentCell.y > state.resizeStartCell.y) {
                         // Check if cells are empty
                         let canResize = true;
                         for (let x = state.resizeStartCell.x + 1; x <= currentCell.x; x++) {
-                            if (!isCellEmpty(x, state.resizeStartCell.y)) {
-                                canResize = false;
-                                break;
+                            for (let y = state.resizeStartCell.y + 1; y <= currentCell.y; y++) {
+                                if (!isCellEmpty(x, y)) {
+                                    canResize = false;
+                                    break;
+                                }
                             }
                         }
                         
                         if (canResize) {
                             // Highlight target cells
                             for (let x = state.resizeStartCell.x + 1; x <= currentCell.x; x++) {
-                                const cellEl = document.querySelector(`.grid-cell[data-x="${x}"][data-y="${state.resizeStartCell.y}"]`);
-                                if (cellEl) cellEl.classList.add('highlight');
+                                for (let y = state.resizeStartCell.y + 1; y <= currentCell.y; y++) {
+                                    const cellEl = document.querySelector(`.grid-cell[data-x="${x}"][data-y="${y}"]`);
+                                    if (cellEl) cellEl.classList.add('highlight');
+                                }
                             }
                             
-                            state.resizeEndCell = { x: currentCell.x, y: state.resizeStartCell.y };
+                            state.resizeEndCell = { x: currentCell.x, y: currentCell.y };
                         }
                     }
                     break;
-                case 'w':
-                    // Can only resize left
-                    if (currentCell.x < state.resizeStartCell.x) {
+                case 'sw':
+                    // Only works if cells below and to the left are empty
+                    if (currentCell.x < state.resizeStartCell.x && currentCell.y > state.resizeStartCell.y) {
+                        // Check if cells are empty
+                        let canResize = true;
+                        for (let x = state.resizeStartCell.x; x <= currentCell.x; x++) {
+                            for (let y = state.resizeStartCell.y + 1; y <= currentCell.y; y++) {
+                                if (!isCellEmpty(x, y)) {
+                                    canResize = false;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (canResize) {
+                            // Highlight target cells
+                            for (let x = state.resizeStartCell.x; x <= currentCell.x; x++) {
+                                for (let y = state.resizeStartCell.y + 1; y <= currentCell.y; y++) {
+                                    const cellEl = document.querySelector(`.grid-cell[data-x="${x}"][data-y="${y}"]`);
+                                    if (cellEl) cellEl.classList.add('highlight');
+                                }
+                            }
+                            
+                            state.resizeEndCell = { x: currentCell.x, y: currentCell.y };
+                        }
+                    }
+                    break;
+                case 'nw':
+                    // Can only resize down and left
+                    if (currentCell.x < state.resizeStartCell.x && currentCell.y > state.resizeStartCell.y) {
                         newX = currentCell.x;
+                        newY = currentCell.y;
                     }
                     break;
             }
             
             // Visual preview of resize
-            if (state.resizeDirection === 'n' || state.resizeDirection === 'w') {
-                const width = state.resizeDirection === 'w' ? 
+            if (state.resizeDirection === 'ne' || state.resizeDirection === 'nw') {
+                const width = state.resizeDirection === 'nw' ? 
                     state.resizeStartCell.x - newX + 1 : 1;
-                const height = state.resizeDirection === 'n' ? 
+                const height = state.resizeDirection === 'ne' ? 
                     state.resizeStartCell.y - newY + 1 : 1;
                 
                 state.resizingPanel.element.style.gridColumn = `${newX + 1} / span ${width}`;
@@ -840,97 +898,26 @@
         }
         
         // Handle resize end
-        function handleResizeEnd() {
+        function handleResizeEnd(e) {
+            // Clear all highlighted cells
+            document.querySelectorAll('.grid-cell.highlight').forEach(cell => {
+                cell.classList.remove('highlight');
+            });
+            
             if (!state.resizingPanel) return;
             
-            const panelEl = state.resizingPanel.element;
+            // Get current cell under cursor
+            const currentCell = getCellFromEvent(e);
+            if (!currentCell) return;
             
-            // Apply resize if we have an end cell (for s and e directions)
-            if (state.resizeEndCell && 
-                (state.resizeDirection === 's' || 
-                 state.resizeDirection === 'e')) {
-                
-                // Mark additional cells as occupied
-                if (state.resizeDirection === 's') {
-                    // Span cells vertically
-                    panelEl.style.gridRow = `${state.resizeStartCell.y + 1} / span ${state.resizeEndCell.y - state.resizeStartCell.y + 1}`;
-                    
-                    // Mark cells as occupied
-                    for (let y = state.resizeStartCell.y + 1; y <= state.resizeEndCell.y; y++) {
-                        const cell = getCell(state.resizeStartCell.x, y);
-                        if (cell) {
-                            cell.occupied = true;
-                            cell.panelId = state.resizingPanel.id;
-                        }
-                    }
-                } else if (state.resizeDirection === 'e') {
-                    // Span cells horizontally
-                    panelEl.style.gridColumn = `${state.resizeStartCell.x + 1} / span ${state.resizeEndCell.x - state.resizeStartCell.x + 1}`;
-                    
-                    // Mark cells as occupied
-                    for (let x = state.resizeStartCell.x + 1; x <= state.resizeEndCell.x; x++) {
-                        const cell = getCell(x, state.resizeStartCell.y);
-                        if (cell) {
-                            cell.occupied = true;
-                            cell.panelId = state.resizingPanel.id;
-                        }
-                    }
-                }
-            } else if (state.resizeDirection === 'n' || state.resizeDirection === 'w') {
-                // For n and w, the visual preview has already been applied
-                // We just need to update the cell occupancy
-                
-                const currentStyle = window.getComputedStyle(panelEl);
-                const gridColumn = currentStyle.gridColumnStart;
-                const gridRow = currentStyle.gridRowStart;
-                const gridSpanCol = panelEl.style.gridColumn.includes('span') ? 
-                    parseInt(panelEl.style.gridColumn.split('span ')[1]) : 1;
-                const gridSpanRow = panelEl.style.gridRow.includes('span') ? 
-                    parseInt(panelEl.style.gridRow.split('span ')[1]) : 1;
-                
-                // Clear previous cell occupation
-                state.grid.cells.forEach(cell => {
-                    if (cell.panelId === state.resizingPanel.id) {
-                        cell.occupied = false;
-                        cell.panelId = null;
-                    }
-                });
-                
-                // Mark new cells as occupied
-                const startX = parseInt(gridColumn) - 1;
-                const startY = parseInt(gridRow) - 1;
-                
-                for (let y = startY; y < startY + gridSpanRow; y++) {
-                    for (let x = startX; x < startX + gridSpanCol; x++) {
-                        const cell = getCell(x, y);
-                        if (cell) {
-                            cell.occupied = true;
-                            cell.panelId = state.resizingPanel.id;
-                        }
-                    }
-                }
-                
-                // Update panel object
-                state.resizingPanel.cell = {
-                    x: startX,
-                    y: startY
-                };
-            }
+            // Apply the resize
+            applyPanelResize(state.resizingPanel, currentCell);
             
             // Clean up
-            panelEl.classList.remove('resizing');
-            gridOverlayEl.classList.remove('visible');
-            
-            // Clear resize state
             state.resizingPanel = null;
             state.resizeDirection = '';
             state.resizeStartCell = null;
             state.resizeEndCell = null;
-            
-            // Clear any highlighted cells
-            document.querySelectorAll('.grid-cell.highlight').forEach(cell => {
-                cell.classList.remove('highlight');
-            });
             
             // Remove document listeners
             document.removeEventListener('mousemove', handleResizeMove);
@@ -1059,19 +1046,22 @@
             }
         });
         
-        // Initialize dashboard with 2x2 grid by default
+        // Initialize dashboard with default panels
         function initDashboard() {
-            // Initialize grid
-            initializeGrid(2, 2);
-            
-            // Add initial panels
-            addPanel('https://www.google.com', 'Google', getCell(0, 0));
-            addPanel('widgets/clock/clock.html', 'Clock', getCell(1, 0));
-            addPanel('https://www.openweathermap.org/widgets', 'Weather', getCell(0, 1));
-            addPanel('https://calendar.google.com/calendar/embed', 'Calendar', getCell(1, 1));
-            
-            // Add drag handles between panels
-            createDragHandles();
+            // Try to load dashboard state
+            if (!loadDashboardState()) {
+                // Initialize grid
+                initializeGrid(2, 2);
+                
+                // Add initial panels
+                addPanel('https://www.google.com', 'Google', getCell(0, 0));
+                addPanel('widgets/clock/clock.html', 'Clock', getCell(1, 0));
+                addPanel('https://www.openweathermap.org/widgets', 'Weather', getCell(0, 1));
+                addPanel('https://calendar.google.com/calendar/embed', 'Calendar', getCell(1, 1));
+                
+                // Add drag handles between panels
+                createDragHandles();
+            }
             
             // Collapse controls by default
             controlsEl.classList.add('collapsed');
@@ -1288,18 +1278,19 @@
                 const normalizedFractions = colFractions.map(f => f / total);
                 
                 // Set the new grid template
-                const templateCols = normalizedFractions.map(f => `${f}fr`).join(' ');
-                dashboardEl.style.gridTemplateColumns = templateCols;
+                const templateColumns = normalizedFractions.map(f => `${f}fr`).join(' ');
+                dashboardEl.style.gridTemplateColumns = templateColumns;
                 
                 // Update the data attribute with the new percentage
                 state.activeDragHandle.dataset.startPercentage = newPercentage;
             }
             
-            // Clean up
+            // Clean up and remove active state
             state.activeDragHandle.classList.remove('active');
             state.activeDragHandle = null;
-            state.dragHandleStartPos = null;
-            state.dragHandleStartPercentage = null;
+            
+            // Save dashboard state
+            saveDashboardState();
         }
         
         // Update grid overlay and drag handles when panels change
@@ -1310,43 +1301,46 @@
         
         // Change grid shape based on dropdown selection
         function changeGridShape(shape) {
-            // Parse the shape (format: "ROWSxCOLS")
-            const [rows, cols] = shape.split('x').map(Number);
+            // Parse shape (e.g., "2x2")
+            const [cols, rows] = shape.split('x').map(n => parseInt(n));
             
-            if (isNaN(rows) || isNaN(cols) || rows < 1 || cols < 1) {
-                console.error('Invalid grid shape:', shape);
-                return;
-            }
+            // Save current panels
+            const currentPanels = [...state.panels];
             
-            // Save current occupied cells
-            const occupiedCells = state.grid.cells.filter(cell => cell.occupied);
+            // Clear dashboard
+            dashboardEl.innerHTML = '';
             
-            // Reinitialize with new grid dimensions
+            // Initialize new grid
             initializeGrid(rows, cols);
             
-            // Restore occupied cells (only those that fit in the new grid)
-            occupiedCells.forEach(oldCell => {
-                if (oldCell.x < cols && oldCell.y < rows) {
-                    const newCell = getCell(oldCell.x, oldCell.y);
-                    if (newCell) {
-                        newCell.occupied = true;
-                        newCell.panelId = oldCell.panelId;
+            // If we're shrinking, some panels might not fit
+            // This implementation is simplified - just place panels in available cells
+            state.panels = [];
+            let cellIndex = 0;
+            
+            for (const panel of currentPanels) {
+                // Find an empty cell
+                let cell = null;
+                while (cellIndex < state.grid.cells.length) {
+                    if (!state.grid.cells[cellIndex].occupied) {
+                        cell = state.grid.cells[cellIndex];
+                        break;
                     }
-                } else {
-                    // Find the panel that was in this cell
-                    const panel = state.panels.find(p => p.id === oldCell.panelId);
-                    if (panel) {
-                        // Remove panels that don't fit
-                        removePanel(panel.id);
-                    }
+                    cellIndex++;
                 }
-            });
+                
+                if (cell) {
+                    addPanel(panel.url, panel.title, cell);
+                } else {
+                    console.warn(`Could not place panel ${panel.id} - grid too small`);
+                }
+            }
             
-            // Reposition all panels based on new grid
-            state.panels.forEach(panel => repositionPanel(panel));
-            
-            // Update grid handles
+            // Create drag handles
             createDragHandles();
+            
+            // Save dashboard state
+            saveDashboardState();
         }
         
         // Add event listeners
@@ -1354,6 +1348,91 @@
             const selectedShape = gridShapeSelectorEl.value;
             changeGridShape(selectedShape);
         });
+        
+        // Save dashboard state to localStorage
+        function saveDashboardState() {
+            // Collect panel data
+            const panelsState = state.panels.map(panel => ({
+                id: panel.id,
+                url: panel.url,
+                title: panel.title,
+                startCell: panel.startCell ? { x: panel.startCell.x, y: panel.startCell.y } : null,
+                endCell: panel.endCell ? { x: panel.endCell.x, y: panel.endCell.y } : null,
+                columnWidths: panel.columnWidths,
+                rowHeights: panel.rowHeights
+            }));
+            
+            // Collect grid data
+            const gridState = {
+                rows: state.grid.rows,
+                cols: state.grid.cols,
+                expansionPreference: state.grid.expansionPreference
+            };
+            
+            // Store in localStorage
+            localStorage.setItem('dashboardState_index', JSON.stringify({
+                panels: panelsState,
+                grid: gridState,
+                nextPanelId: state.nextPanelId
+            }));
+        }
+        
+        // Load dashboard state from localStorage
+        function loadDashboardState() {
+            const savedState = localStorage.getItem('dashboardState_index');
+            if (!savedState) return false;
+            
+            try {
+                const parsedState = JSON.parse(savedState);
+                
+                // Clear dashboard
+                dashboardEl.innerHTML = '';
+                state.panels = [];
+                
+                // Restore grid state
+                if (parsedState.grid) {
+                    initializeGrid(parsedState.grid.rows, parsedState.grid.cols);
+                    state.grid.expansionPreference = parsedState.grid.expansionPreference || 'columns';
+                }
+                
+                // Restore panel ID counter
+                state.nextPanelId = parsedState.nextPanelId || 1;
+                
+                // Recreate panels
+                if (parsedState.panels && parsedState.panels.length) {
+                    parsedState.panels.forEach(panelState => {
+                        // Find cells for start and end
+                        const startCell = panelState.startCell ? 
+                            getCell(panelState.startCell.x, panelState.startCell.y) : 
+                            findEmptyCell();
+                            
+                        // If we couldn't find the startCell, skip this panel
+                        if (!startCell) return;
+                        
+                        // Create panel
+                        addPanel(
+                            panelState.url,
+                            panelState.title,
+                            startCell,
+                            panelState.id,
+                            panelState.endCell ? 
+                                getCell(panelState.endCell.x, panelState.endCell.y) : 
+                                null,
+                            panelState.columnWidths,
+                            panelState.rowHeights
+                        );
+                    });
+                }
+                
+                // Recreate drag handles
+                createDragHandles();
+                
+                return true;
+            } catch (e) {
+                console.error('Error loading dashboard state:', e);
+                return false;
+            }
+        }
         
         // Initialize on page load
         window.addEventListener('load', initDashboard);

@@ -315,6 +315,63 @@
             resizeStartDimensions: null
         };
         
+        // Save dashboard state to localStorage
+        function saveDashboardState() {
+            const windowsState = state.windows.map(window => ({
+                id: window.id,
+                url: window.url,
+                title: window.title,
+                position: window.position,
+                isMinimized: window.isMinimized,
+                isMaximized: window.isMaximized,
+                previousPosition: window.previousPosition,
+                zIndex: window.zIndex
+            }));
+            
+            localStorage.setItem('dashboardState_index2', JSON.stringify({
+                windows: windowsState,
+                nextWindowId: state.nextWindowId,
+                zIndex: state.zIndex
+            }));
+        }
+        
+        // Load dashboard state from localStorage
+        function loadDashboardState() {
+            const savedState = localStorage.getItem('dashboardState_index2');
+            if (!savedState) return false;
+            
+            try {
+                const parsedState = JSON.parse(savedState);
+                state.nextWindowId = parsedState.nextWindowId || 1;
+                state.zIndex = parsedState.zIndex || 1;
+                
+                // Clear existing windows
+                state.windows = [];
+                dashboardEl.innerHTML = '';
+                
+                // Recreate windows from saved state
+                if (parsedState.windows && parsedState.windows.length) {
+                    parsedState.windows.forEach(windowState => {
+                        addWindow(
+                            windowState.url,
+                            windowState.title,
+                            windowState.position,
+                            windowState.id,
+                            windowState.zIndex,
+                            windowState.isMinimized,
+                            windowState.isMaximized,
+                            windowState.previousPosition
+                        );
+                    });
+                }
+                
+                return true;
+            } catch (e) {
+                console.error('Error loading dashboard state:', e);
+                return false;
+            }
+        }
+        
         // DOM references
         const dashboardEl = document.getElementById('dashboard');
         const controlsEl = document.getElementById('controls');
@@ -328,7 +385,7 @@
         const addWindowConfirmEl = document.getElementById('add-window-confirm');
         
         // Add a new window
-        function addWindow(url, title, position = null) {
+        function addWindow(url, title, position = null, id = null, zIndex = null, isMinimized = false, isMaximized = false, previousPosition = null) {
             // Generate default position if not provided
             if (!position) {
                 // Calculate grid position to prevent overlap
@@ -350,8 +407,8 @@
                 };
             }
             
-            const windowId = `window-${state.nextWindowId++}`;
-            const zIndex = ++state.zIndex;
+            const windowId = id || `window-${state.nextWindowId++}`;
+            const windowZIndex = zIndex || ++state.zIndex;
             
             // Create window element
             const windowEl = document.createElement('div');
@@ -361,7 +418,7 @@
             windowEl.style.top = `${position.y}px`;
             windowEl.style.width = `${position.width}px`;
             windowEl.style.height = `${position.height}px`;
-            windowEl.style.zIndex = zIndex;
+            windowEl.style.zIndex = windowZIndex;
             
             // Create window content
             windowEl.innerHTML = `
@@ -396,10 +453,10 @@
                 title: title || `Window ${windowId.split('-')[1]}`,
                 element: windowEl,
                 position: { ...position },
-                zIndex,
-                isMinimized: false,
-                isMaximized: false,
-                previousPosition: null
+                zIndex: windowZIndex,
+                isMinimized: isMinimized,
+                isMaximized: isMaximized,
+                previousPosition: previousPosition
             };
             
             // Add to windows array
@@ -408,11 +465,24 @@
             // Add to physics system
             windowPhysics.addWindow(windowEl);
             
+            // Apply minimized/maximized state if needed
+            if (isMinimized) {
+                windowEl.style.display = 'none';
+            } else if (isMaximized) {
+                windowEl.style.left = '0';
+                windowEl.style.top = '0';
+                windowEl.style.width = '100%';
+                windowEl.style.height = '100%';
+            }
+            
             // Setup window events
             setupWindowEvents(window);
             
             // Activate new window
             activateWindow(window);
+            
+            // Save dashboard state
+            saveDashboardState();
             
             return window;
         }
@@ -526,9 +596,6 @@
             const windowEl = state.draggingWindow.element;
             windowEl.classList.remove('dragging');
             
-            // Re-add to physics system after dragging
-            windowPhysics.addWindow(windowEl);
-            
             // Clean up
             state.draggingWindow = null;
             state.dragOffset = { x: 0, y: 0 };
@@ -536,6 +603,9 @@
             // Remove document listeners
             document.removeEventListener('mousemove', handleDragMove);
             document.removeEventListener('mouseup', handleDragEnd);
+            
+            // Save dashboard state
+            saveDashboardState();
         }
         
         // Handle resize move
@@ -610,6 +680,9 @@
             // Remove document listeners
             document.removeEventListener('mousemove', handleResizeMove);
             document.removeEventListener('mouseup', handleResizeEnd);
+            
+            // Save dashboard state
+            saveDashboardState();
         }
         
         // Activate (bring to front) window
@@ -624,11 +697,17 @@
                     w.element.classList.remove('active');
                 }
             });
+            
+            // Save dashboard state
+            saveDashboardState();
         }
         
         // Toggle maximize window
         function toggleMaximize(window) {
             const windowEl = window.element;
+            
+            // Remove from physics system while maximized
+            windowPhysics.removeWindow(windowEl);
             
             if (!window.isMaximized) {
                 // Save current position
@@ -661,7 +740,13 @@
                 }
                 
                 window.isMaximized = false;
+                
+                // Add back to physics system
+                windowPhysics.addWindow(windowEl);
             }
+            
+            // Save dashboard state
+            saveDashboardState();
         }
         
         // Toggle minimize window
@@ -688,6 +773,9 @@
                 // Bring to front
                 activateWindow(window);
             }
+            
+            // Save dashboard state
+            saveDashboardState();
         }
         
         // Remove window
@@ -705,6 +793,9 @@
                 
                 // Remove from windows array
                 state.windows.splice(windowIndex, 1);
+                
+                // Save dashboard state
+                saveDashboardState();
             }
         }
         
@@ -801,13 +892,19 @@
             }
         });
         
-        // Initialize dashboard with default windows
+        // Initialize dashboard
         function initDashboard() {
-            // Add initial windows
-            addWindow('https://www.google.com', 'Google', { x: 50, y: 50, width: 600, height: 400 });
-            addWindow('widgets/clock/clock.html', 'Clock', { x: 100, y: 100, width: 400, height: 300 });
-            addWindow('https://www.openweathermap.org/widgets', 'Weather', { x: 150, y: 150, width: 500, height: 350 });
-            addWindow('https://calendar.google.com/calendar/embed', 'Calendar', { x: 200, y: 200, width: 550, height: 450 });
+            // Setup window physics system
+            windowPhysics.init();
+            
+            // Try to load saved state first
+            if (!loadDashboardState()) {
+                // Add initial windows if no saved state
+                addWindow('https://www.google.com', 'Google', { x: 50, y: 50, width: 600, height: 400 });
+                addWindow('widgets/clock/clock.html', 'Clock', { x: 100, y: 100, width: 400, height: 300 });
+                addWindow('https://www.openweathermap.org/widgets', 'Weather', { x: 150, y: 150, width: 500, height: 350 });
+                addWindow('https://calendar.google.com/calendar/embed', 'Calendar', { x: 200, y: 200, width: 550, height: 450 });
+            }
             
             // Collapse controls by default
             controlsEl.classList.add('collapsed');

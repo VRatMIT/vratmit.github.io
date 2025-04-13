@@ -393,6 +393,63 @@
             resizeStartDimensions: null
         };
         
+        // Save dashboard state to localStorage
+        function saveDashboardState() {
+            const windowsState = state.windows.map(window => ({
+                id: window.id,
+                url: window.url,
+                title: window.title,
+                position: window.position,
+                isMinimized: window.isMinimized,
+                isMaximized: window.isMaximized,
+                previousPosition: window.previousPosition,
+                zIndex: window.zIndex
+            }));
+            
+            localStorage.setItem('dashboardState_particles', JSON.stringify({
+                windows: windowsState,
+                nextWindowId: state.nextWindowId,
+                zIndex: state.zIndex
+            }));
+        }
+        
+        // Load dashboard state from localStorage
+        function loadDashboardState() {
+            const savedState = localStorage.getItem('dashboardState_particles');
+            if (!savedState) return false;
+            
+            try {
+                const parsedState = JSON.parse(savedState);
+                state.nextWindowId = parsedState.nextWindowId || 1;
+                state.zIndex = parsedState.zIndex || 1;
+                
+                // Clear existing windows
+                state.windows = [];
+                dashboardEl.innerHTML = '';
+                
+                // Recreate windows from saved state
+                if (parsedState.windows && parsedState.windows.length) {
+                    parsedState.windows.forEach(windowState => {
+                        addWindow(
+                            windowState.url,
+                            windowState.title,
+                            windowState.position,
+                            windowState.id,
+                            windowState.zIndex,
+                            windowState.isMinimized,
+                            windowState.isMaximized,
+                            windowState.previousPosition
+                        );
+                    });
+                }
+                
+                return true;
+            } catch (e) {
+                console.error('Error loading dashboard state:', e);
+                return false;
+            }
+        }
+        
         // DOM references
         const dashboardEl = document.getElementById('dashboard');
         const controlsEl = document.getElementById('controls');
@@ -406,7 +463,7 @@
         const addWindowConfirmEl = document.getElementById('add-window-confirm');
         
         // Add a new window
-        function addWindow(url, title, position = null) {
+        function addWindow(url, title, position = null, id = null, zIndex = null, isMinimized = false, isMaximized = false, previousPosition = null) {
             // Generate default position if not provided
             if (!position) {
                 position = {
@@ -417,8 +474,8 @@
                 };
             }
             
-            const windowId = `window-${state.nextWindowId++}`;
-            const zIndex = ++state.zIndex;
+            const windowId = id || `window-${state.nextWindowId++}`;
+            const windowZIndex = zIndex || ++state.zIndex;
             
             // Create window element
             const windowEl = document.createElement('div');
@@ -428,7 +485,7 @@
             windowEl.style.top = `${position.y}px`;
             windowEl.style.width = `${position.width}px`;
             windowEl.style.height = `${position.height}px`;
-            windowEl.style.zIndex = zIndex;
+            windowEl.style.zIndex = windowZIndex;
             
             // Create window content
             windowEl.innerHTML = `
@@ -463,20 +520,33 @@
                 title: title || `Window ${windowId.split('-')[1]}`,
                 element: windowEl,
                 position: { ...position },
-                zIndex,
-                isMinimized: false,
-                isMaximized: false,
-                previousPosition: null
+                zIndex: windowZIndex,
+                isMinimized: isMinimized,
+                isMaximized: isMaximized,
+                previousPosition: previousPosition
             };
             
             // Add to windows array
             state.windows.push(window);
+            
+            // Apply minimized/maximized state if needed
+            if (isMinimized) {
+                windowEl.style.display = 'none';
+            } else if (isMaximized) {
+                windowEl.style.left = '0';
+                windowEl.style.top = '0';
+                windowEl.style.width = '100%';
+                windowEl.style.height = '100%';
+            }
             
             // Setup window events
             setupWindowEvents(window);
             
             // Activate new window
             activateWindow(window);
+            
+            // Save dashboard state
+            saveDashboardState();
             
             return window;
         }
@@ -594,6 +664,9 @@
             // Remove document listeners
             document.removeEventListener('mousemove', handleDragMove);
             document.removeEventListener('mouseup', handleDragEnd);
+            
+            // Save dashboard state
+            saveDashboardState();
         }
         
         // Handle resize move
@@ -668,6 +741,9 @@
             // Remove document listeners
             document.removeEventListener('mousemove', handleResizeMove);
             document.removeEventListener('mouseup', handleResizeEnd);
+            
+            // Save dashboard state
+            saveDashboardState();
         }
         
         // Activate (bring to front) window
@@ -682,6 +758,9 @@
                     w.element.classList.remove('active');
                 }
             });
+            
+            // Save dashboard state
+            saveDashboardState();
         }
         
         // Toggle maximize window
@@ -720,6 +799,9 @@
                 
                 window.isMaximized = false;
             }
+            
+            // Save dashboard state
+            saveDashboardState();
         }
         
         // Toggle minimize window
@@ -746,6 +828,9 @@
                 // Bring to front
                 activateWindow(window);
             }
+            
+            // Save dashboard state
+            saveDashboardState();
         }
         
         // Remove window
@@ -760,6 +845,9 @@
                 
                 // Remove from windows array
                 state.windows.splice(windowIndex, 1);
+                
+                // Save dashboard state
+                saveDashboardState();
             }
         }
         
@@ -861,55 +949,14 @@
             // Create particles
             createParticles();
             
-            // Calculate window positions based on screen size
-            const screenWidth = window.innerWidth;
-            const screenHeight = window.innerHeight;
-            
-            // Define window sizes and positions
-            const windows = [
-                {
-                    url: 'https://www.google.com',
-                    title: 'Google',
-                    x: screenWidth * 0.05,
-                    y: screenHeight * 0.05,
-                    width: screenWidth * 0.4,
-                    height: screenHeight * 0.4
-                },
-                {
-                    url: 'widgets/clock/clock.html',
-                    title: 'Clock',
-                    x: screenWidth * 0.5,
-                    y: screenHeight * 0.05,
-                    width: screenWidth * 0.25,
-                    height: screenHeight * 0.25
-                },
-                {
-                    url: 'widgets/weather/weather.html',
-                    title: 'Weather',
-                    x: screenWidth * 0.5,
-                    y: screenHeight * 0.35,
-                    width: screenWidth * 0.25,
-                    height: screenHeight * 0.3
-                },
-                {
-                    url: 'https://calendar.google.com/calendar/embed',
-                    title: 'Calendar',
-                    x: screenWidth * 0.05,
-                    y: screenHeight * 0.5,
-                    width: screenWidth * 0.4,
-                    height: screenHeight * 0.45
-                }
-            ];
-            
-            // Add windows with calculated positions
-            windows.forEach(win => {
-                addWindow(win.url, win.title, {
-                    x: win.x,
-                    y: win.y,
-                    width: win.width,
-                    height: win.height
-                });
-            });
+            // Try to load saved state first
+            if (!loadDashboardState()) {
+                // Add initial windows if no saved state
+                addWindow('https://www.google.com', 'Google', { x: 50, y: 50, width: 600, height: 400 });
+                addWindow('widgets/clock/clock.html', 'Clock', { x: 100, y: 100, width: 400, height: 300 });
+                addWindow('https://www.openweathermap.org/widgets', 'Weather', { x: 150, y: 150, width: 500, height: 350 });
+                addWindow('https://calendar.google.com/calendar/embed', 'Calendar', { x: 200, y: 200, width: 550, height: 450 });
+            }
             
             // Collapse controls by default
             controlsEl.classList.add('collapsed');
