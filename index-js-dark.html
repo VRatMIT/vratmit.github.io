@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desktop Dashboard with Floating Windows</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        
+        .dashboard-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            background-color: #0a0a0a; /* Darker background */
+            background-image:
+                linear-gradient(rgba(0, 255, 255, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 255, 0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+            overflow: hidden;
+        }
+
+        
+        .window {
+            position: absolute;
+            background-color: rgba(20, 20, 20, 0.95);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border-radius: 5px;
+            min-width: 250px;
+            min-height: 200px;
+            transition: box-shadow 0.2s;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+        }
+        
+        .window.active {
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.4);
+            border: 1px solid rgba(0, 255, 255, 0.5);
+        }
+        
+        .window-header {
+            padding: 10px;
+            background-color: rgba(30, 30, 30, 0.95);
+            color: #00ffff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+            user-select: none;
+            border-bottom: 1px solid rgba(0, 255, 255, 0.3);
+        }
+        
+        .window-content {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .window-content iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        .window-controls {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .window-button {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .minimize-button {
+            background-color: #f1c40f;
+        }
+        
+        .maximize-button {
+            background-color: #27ae60;
+        }
+        
+        .close-button {
+            background-color: #e74c3c;
+        }
+        
+        .resize-handle {
+            position: absolute;
+            background-color: transparent;
+            z-index: 10;
+        }
+        
+        .resize-handle.n {
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            cursor: ns-resize;
+        }
+        
+        .resize-handle.s {
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            cursor: ns-resize;
+        }
+        
+        .resize-handle.e {
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 5px;
+            cursor: ew-resize;
+        }
+        
+        .resize-handle.w {
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 5px;
+            cursor: ew-resize;
+        }
+        
+        .resize-handle.ne {
+            top: 0;
+            right: 0;
+            width: 10px;
+            height: 10px;
+            cursor: nesw-resize;
+        }
+        
+        .resize-handle.nw {
+            top: 0;
+            left: 0;
+            width: 10px;
+            height: 10px;
+            cursor: nwse-resize;
+        }
+        
+        .resize-handle.se {
+            bottom: 0;
+            right: 0;
+            width: 10px;
+            height: 10px;
+            cursor: nwse-resize;
+        }
+        
+        .resize-handle.sw {
+            bottom: 0;
+            left: 0;
+            width: 10px;
+            height: 10px;
+            cursor: nesw-resize;
+        }
+        
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px;
+            background-color: rgba(20, 20, 20, 0.95);
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+            z-index: 1000;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            transition: transform 0.3s;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+        }
+        
+        .controls.collapsed {
+            transform: translateY(calc(100% - 40px));
+        }
+        
+        .controls-toggle {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 30px;
+            height: 15px;
+            background-color: white;
+            border-radius: 5px 5px 0 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .controls input, .controls select, .controls button {
+            padding: 8px 12px;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 4px;
+            font-size: 14px;
+            background-color: rgba(30, 30, 30, 0.95);
+            color: #00ffff;
+        }
+        
+        .controls button {
+            background-color: rgba(0, 255, 255, 0.2);
+            color: #00ffff;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .controls button:hover {
+            background-color: rgba(0, 255, 255, 0.3);
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.4);
+        }
+        
+        .add-window-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(20, 20, 20, 0.95);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+            z-index: 1001;
+            width: 400px;
+            max-width: 90%;
+            display: none;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            color: #00ffff;
+        }
+        
+        .add-window-modal.visible {
+            display: block;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .modal-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .dragging {
+            opacity: 0.8;
+            pointer-events: none;
+        }
+        
+        .resizing {
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container" id="dashboard">
+        <!-- Windows will be added here dynamically -->
+    </div>
+    
+    <!-- Controls -->
+    <div class="controls" id="controls">
+        <div class="controls-toggle" id="controls-toggle">▲</div>
+        <button id="add-window-btn">Add Window</button>
+        <select id="template-selector">
+            <option value="">Quick Add</option>
+            <option value="https://www.google.com">Google</option>
+            <option value="widgets/weather/weather.html">Weather</option>
+            <option value="widgets/clock/clock.html">Clock</option>
+            <option value="widgets/calendar-events/calendar-events.html">Current Events</option>
+            <option value="widgets/mbta-bus/mbta-bus.html">MBTA Bus Tracker</option>
+            <option value="widgets/countdown/countdown.html">Reality Hack Countdown</option>
+            <option value="https://www.bbc.com">News</option>
+            <option value="https://calendar.google.com/calendar/embed">Calendar</option>
+        </select>
+    </div>
+    
+    <!-- Add Window Modal -->
+    <div class="add-window-modal" id="add-window-modal">
+        <div class="modal-header">
+            <h3>Add New Window</h3>
+            <span class="close-button" id="modal-close">✕</span>
+        </div>
+        <div class="modal-form">
+            <input type="text" id="window-url" placeholder="Enter website URL (e.g., https://example.com)" value="https://example.com">
+            <input type="text" id="window-title" placeholder="Title (optional)">
+            <button id="add-window-confirm">Add Window</button>
+        </div>
+    </div>
+
+    <script>
+        // Dashboard state
+        const state = {
+            windows: [],
+            nextWindowId: 1,
+            zIndex: 1,
+            draggingWindow: null,
+            resizingWindow: null,
+            resizeDirection: '',
+            dragOffset: { x: 0, y: 0 },
+            resizeStartDimensions: null
+        };
+        
+        // DOM references
+        const dashboardEl = document.getElementById('dashboard');
+        const controlsEl = document.getElementById('controls');
+        const controlsToggleEl = document.getElementById('controls-toggle');
+        const addWindowBtnEl = document.getElementById('add-window-btn');
+        const templateSelectorEl = document.getElementById('template-selector');
+        const addWindowModalEl = document.getElementById('add-window-modal');
+        const modalCloseEl = document.getElementById('modal-close');
+        const windowUrlEl = document.getElementById('window-url');
+        const windowTitleEl = document.getElementById('window-title');
+        const addWindowConfirmEl = document.getElementById('add-window-confirm');
+        
+        // Add a new window
+        function addWindow(url, title, position = null) {
+            // Generate default position if not provided
+            if (!position) {
+                position = {
+                    x: 50 + (state.windows.length * 30) % 200,
+                    y: 50 + (state.windows.length * 30) % 150,
+                    width: 400,
+                    height: 300
+                };
+            }
+            
+            const windowId = `window-${state.nextWindowId++}`;
+            const zIndex = ++state.zIndex;
+            
+            // Create window element
+            const windowEl = document.createElement('div');
+            windowEl.className = 'window';
+            windowEl.id = windowId;
+            windowEl.style.left = `${position.x}px`;
+            windowEl.style.top = `${position.y}px`;
+            windowEl.style.width = `${position.width}px`;
+            windowEl.style.height = `${position.height}px`;
+            windowEl.style.zIndex = zIndex;
+            
+            // Create window content
+            windowEl.innerHTML = `
+                <div class="window-header">
+                    <div class="window-controls">
+                        <div class="window-button close-button" title="Close"></div>
+                        <div class="window-button maximize-button" title="Maximize"></div>
+                        <div class="window-button minimize-button" title="Minimize"></div>
+                    </div>
+                    <span>${title || `Window ${windowId.split('-')[1]}`}</span>
+                </div>
+                <div class="window-content">
+                    <iframe src="${url}" title="${title}" allowfullscreen></iframe>
+                </div>
+                <div class="resize-handle n"></div>
+                <div class="resize-handle s"></div>
+                <div class="resize-handle e"></div>
+                <div class="resize-handle w"></div>
+                <div class="resize-handle ne"></div>
+                <div class="resize-handle nw"></div>
+                <div class="resize-handle se"></div>
+                <div class="resize-handle sw"></div>
+            `;
+            
+            // Add to DOM
+            dashboardEl.appendChild(windowEl);
+            
+            // Create window object
+            const window = {
+                id: windowId,
+                url,
+                title: title || `Window ${windowId.split('-')[1]}`,
+                element: windowEl,
+                position: { ...position },
+                zIndex,
+                isMinimized: false,
+                isMaximized: false,
+                previousPosition: null
+            };
+            
+            // Add to windows array
+            state.windows.push(window);
+            
+            // Setup window events
+            setupWindowEvents(window);
+            
+            // Activate new window
+            activateWindow(window);
+            
+            return window;
+        }
+        
+        // Setup window events
+        function setupWindowEvents(window) {
+            const windowEl = window.element;
+            const headerEl = windowEl.querySelector('.window-header');
+            const closeButtonEl = windowEl.querySelector('.close-button');
+            const maximizeButtonEl = windowEl.querySelector('.maximize-button');
+            const minimizeButtonEl = windowEl.querySelector('.minimize-button');
+            const resizeHandles = windowEl.querySelectorAll('.resize-handle');
+            
+            // Make window active when clicked anywhere
+            windowEl.addEventListener('mousedown', () => {
+                activateWindow(window);
+            });
+            
+            // Close button handler
+            closeButtonEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                removeWindow(window.id);
+            });
+            
+            // Maximize button handler
+            maximizeButtonEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleMaximize(window);
+            });
+            
+            // Minimize button handler
+            minimizeButtonEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleMinimize(window);
+            });
+            
+            // Drag handler
+            headerEl.addEventListener('mousedown', (e) => {
+                if (window.isMaximized) return;
+                
+                e.preventDefault();
+                
+                const rect = windowEl.getBoundingClientRect();
+                state.draggingWindow = window;
+                state.dragOffset = {
+                    x: e.clientX - rect.left,
+                    y: e.clientY - rect.top
+                };
+                
+                windowEl.classList.add('dragging');
+                
+                // Add document listeners
+                document.addEventListener('mousemove', handleDragMove);
+                document.addEventListener('mouseup', handleDragEnd);
+            });
+            
+            // Resize handlers
+            resizeHandles.forEach(handle => {
+                handle.addEventListener('mousedown', (e) => {
+                    if (window.isMaximized) return;
+                    
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const rect = windowEl.getBoundingClientRect();
+                    state.resizingWindow = window;
+                    state.resizeDirection = handle.classList[1]; // n, s, e, w, ne, nw, se, sw
+                    state.resizeStartDimensions = {
+                        x: rect.left,
+                        y: rect.top,
+                        width: rect.width,
+                        height: rect.height,
+                        mouseX: e.clientX,
+                        mouseY: e.clientY
+                    };
+                    
+                    windowEl.classList.add('resizing');
+                    
+                    // Add document listeners
+                    document.addEventListener('mousemove', handleResizeMove);
+                    document.addEventListener('mouseup', handleResizeEnd);
+                });
+            });
+        }
+        
+        // Handle drag move
+        function handleDragMove(e) {
+            if (!state.draggingWindow) return;
+            
+            const windowEl = state.draggingWindow.element;
+            
+            const newLeft = e.clientX - state.dragOffset.x;
+            const newTop = e.clientY - state.dragOffset.y;
+            
+            // Update element position
+            windowEl.style.left = `${newLeft}px`;
+            windowEl.style.top = `${newTop}px`;
+            
+            // Update window object
+            state.draggingWindow.position.x = newLeft;
+            state.draggingWindow.position.y = newTop;
+        }
+        
+        // Handle drag end
+        function handleDragEnd() {
+            if (!state.draggingWindow) return;
+            
+            const windowEl = state.draggingWindow.element;
+            windowEl.classList.remove('dragging');
+            
+            // Clean up
+            state.draggingWindow = null;
+            state.dragOffset = { x: 0, y: 0 };
+            
+            // Remove document listeners
+            document.removeEventListener('mousemove', handleDragMove);
+            document.removeEventListener('mouseup', handleDragEnd);
+        }
+        
+        // Handle resize move
+        function handleResizeMove(e) {
+            if (!state.resizingWindow) return;
+            
+            const windowEl = state.resizingWindow.element;
+            const minWidth = 250;
+            const minHeight = 200;
+            
+            // Calculate mouse movement delta
+            const deltaX = e.clientX - state.resizeStartDimensions.mouseX;
+            const deltaY = e.clientY - state.resizeStartDimensions.mouseY;
+            
+            // Initial dimensions
+            let newLeft = state.resizeStartDimensions.x;
+            let newTop = state.resizeStartDimensions.y;
+            let newWidth = state.resizeStartDimensions.width;
+            let newHeight = state.resizeStartDimensions.height;
+            
+            // Apply changes based on resize direction
+            if (state.resizeDirection.includes('n')) {
+                newTop = state.resizeStartDimensions.y + deltaY;
+                newHeight = Math.max(minHeight, state.resizeStartDimensions.height - deltaY);
+                
+                if (newHeight === minHeight && deltaY > 0) {
+                    newTop = state.resizeStartDimensions.y + state.resizeStartDimensions.height - minHeight;
+                }
+            }
+            if (state.resizeDirection.includes('s')) {
+                newHeight = Math.max(minHeight, state.resizeStartDimensions.height + deltaY);
+            }
+            if (state.resizeDirection.includes('w')) {
+                newLeft = state.resizeStartDimensions.x + deltaX;
+                newWidth = Math.max(minWidth, state.resizeStartDimensions.width - deltaX);
+                
+                if (newWidth === minWidth && deltaX > 0) {
+                    newLeft = state.resizeStartDimensions.x + state.resizeStartDimensions.width - minWidth;
+                }
+            }
+            if (state.resizeDirection.includes('e')) {
+                newWidth = Math.max(minWidth, state.resizeStartDimensions.width + deltaX);
+            }
+            
+            // Update element dimensions
+            windowEl.style.left = `${newLeft}px`;
+            windowEl.style.top = `${newTop}px`;
+            windowEl.style.width = `${newWidth}px`;
+            windowEl.style.height = `${newHeight}px`;
+            
+            // Update window object
+            state.resizingWindow.position = {
+                x: newLeft,
+                y: newTop,
+                width: newWidth,
+                height: newHeight
+            };
+        }
+        
+        // Handle resize end
+        function handleResizeEnd() {
+            if (!state.resizingWindow) return;
+            
+            const windowEl = state.resizingWindow.element;
+            windowEl.classList.remove('resizing');
+            
+            // Clean up
+            state.resizingWindow = null;
+            state.resizeDirection = '';
+            state.resizeStartDimensions = null;
+            
+            // Remove document listeners
+            document.removeEventListener('mousemove', handleResizeMove);
+            document.removeEventListener('mouseup', handleResizeEnd);
+        }
+        
+        // Activate (bring to front) window
+        function activateWindow(window) {
+            // Update z-index for all windows
+            state.windows.forEach(w => {
+                if (w.id === window.id) {
+                    w.zIndex = ++state.zIndex;
+                    w.element.style.zIndex = w.zIndex;
+                    w.element.classList.add('active');
+                } else {
+                    w.element.classList.remove('active');
+                }
+            });
+        }
+        
+        // Toggle maximize window
+        function toggleMaximize(window) {
+            const windowEl = window.element;
+            
+            if (!window.isMaximized) {
+                // Save current position
+                window.previousPosition = { ...window.position };
+                
+                // Maximize
+                windowEl.style.left = '0';
+                windowEl.style.top = '0';
+                windowEl.style.width = '100%';
+                windowEl.style.height = '100%';
+                
+                window.position = {
+                    x: 0,
+                    y: 0,
+                    width: window.innerWidth,
+                    height: window.innerHeight
+                };
+                
+                window.isMaximized = true;
+            } else {
+                // Restore position
+                if (window.previousPosition) {
+                    windowEl.style.left = `${window.previousPosition.x}px`;
+                    windowEl.style.top = `${window.previousPosition.y}px`;
+                    windowEl.style.width = `${window.previousPosition.width}px`;
+                    windowEl.style.height = `${window.previousPosition.height}px`;
+                    
+                    window.position = { ...window.previousPosition };
+                    window.previousPosition = null;
+                }
+                
+                window.isMaximized = false;
+            }
+        }
+        
+        // Toggle minimize window
+        function toggleMinimize(window) {
+            const windowEl = window.element;
+            
+            if (!window.isMinimized) {
+                // Save current position if not already saved
+                if (!window.previousPosition) {
+                    window.previousPosition = { ...window.position };
+                }
+                
+                // Minimize (just hide for now)
+                windowEl.style.display = 'none';
+                window.isMinimized = true;
+                
+                // In a real implementation, you might create a taskbar
+                // and add a button there to represent the minimized window
+            } else {
+                // Restore
+                windowEl.style.display = 'flex';
+                window.isMinimized = false;
+                
+                // Bring to front
+                activateWindow(window);
+            }
+        }
+        
+        // Remove window
+        function removeWindow(windowId) {
+            const windowIndex = state.windows.findIndex(w => w.id === windowId);
+            
+            if (windowIndex !== -1) {
+                const window = state.windows[windowIndex];
+                
+                // Remove from DOM
+                window.element.remove();
+                
+                // Remove from windows array
+                state.windows.splice(windowIndex, 1);
+            }
+        }
+        
+        // Controls toggle
+        controlsToggleEl.addEventListener('click', () => {
+            controlsEl.classList.toggle('collapsed');
+            controlsToggleEl.textContent = controlsEl.classList.contains('collapsed') ? '▼' : '▲';
+        });
+        
+        // Add window button
+        addWindowBtnEl.addEventListener('click', () => {
+            showAddWindowModal();
+        });
+        
+        // Template selector
+        templateSelectorEl.addEventListener('change', () => {
+            const selectedUrl = templateSelectorEl.value;
+            if (selectedUrl) {
+                // Use the option text as the title
+                const selectedTitle = templateSelectorEl.options[templateSelectorEl.selectedIndex].text;
+                addWindow(selectedUrl, selectedTitle);
+                templateSelectorEl.value = '';
+            }
+        });
+        
+        // Modal close
+        modalCloseEl.addEventListener('click', () => {
+            hideAddWindowModal();
+        });
+        
+        // Add window confirm
+        addWindowConfirmEl.addEventListener('click', () => {
+            const url = validateUrl(windowUrlEl.value);
+            if (url) {
+                const title = windowTitleEl.value || `Window ${state.nextWindowId}`;
+                addWindow(url, title);
+                hideAddWindowModal();
+            } else {
+                alert("Please enter a valid URL (including https:// or http://)");
+            }
+        });
+        
+        // Show add window modal
+        function showAddWindowModal() {
+            addWindowModalEl.classList.add('visible');
+        }
+        
+        // Hide add window modal
+        function hideAddWindowModal() {
+            addWindowModalEl.classList.remove('visible');
+            // Reset inputs
+            windowUrlEl.value = "https://example.com";
+            windowTitleEl.value = "";
+        }
+        
+        // Validate URL
+        function validateUrl(url) {
+            try {
+                const newUrl = new URL(url);
+                return newUrl.toString();
+            } catch(e) {
+                return false;
+            }
+        }
+        
+        // Handle keyboard events (Escape to cancel modals/dragging)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                // Close modal if open
+                if (addWindowModalEl.classList.contains('visible')) {
+                    hideAddWindowModal();
+                }
+                
+                // Cancel dragging
+                if (state.draggingWindow) {
+                    state.draggingWindow.element.classList.remove('dragging');
+                    state.draggingWindow = null;
+                    state.dragOffset = { x: 0, y: 0 };
+                    
+                    document.removeEventListener('mousemove', handleDragMove);
+                    document.removeEventListener('mouseup', handleDragEnd);
+                }
+                
+                // Cancel resizing
+                if (state.resizingWindow) {
+                    state.resizingWindow.element.classList.remove('resizing');
+                    state.resizingWindow = null;
+                    state.resizeDirection = '';
+                    state.resizeStartDimensions = null;
+                    
+                    document.removeEventListener('mousemove', handleResizeMove);
+                    document.removeEventListener('mouseup', handleResizeEnd);
+                }
+            }
+        });
+        
+        // Initialize dashboard with default windows
+        function initDashboard() {
+            // Add initial windows
+            addWindow('https://www.google.com', 'Google', { x: 50, y: 50, width: 600, height: 400 });
+            addWindow('widgets/clock/clock.html', 'Clock', { x: 100, y: 100, width: 400, height: 300 });
+            addWindow('https://www.openweathermap.org/widgets', 'Weather', { x: 150, y: 150, width: 500, height: 350 });
+            addWindow('https://calendar.google.com/calendar/embed', 'Calendar', { x: 200, y: 200, width: 550, height: 450 });
+            
+            // Collapse controls by default
+            controlsEl.classList.add('collapsed');
+            controlsToggleEl.textContent = '▼';
+        }
+        
+        // Initialize on page load
+        window.addEventListener('load', initDashboard);
+
+        // Function to inject selective dark mode CSS into an iframe
+        function injectSelectiveDarkModeCSS(iframe) {
+            const darkCSS = `
+                html, body {
+                    background-color: #1e1e1e !important;
+                    color: #ffffff !important;
+                }
+
+                /* Apply background and text color only to elements that explicitly define defaults */
+                body, div, p, span, header, footer, section, article, aside, main {
+                    background-color: transparent !important;
+                    color: inherit !important;
+                }
+
+                /* Preserve original colors for elements explicitly styled by widget authors */
+                a, button, input, select, textarea, svg, img, canvas, .colored, [style*="color"] {
+                    background-color: initial !important;
+                    color: initial !important;
+                }
+
+                /* Optionally, ensure input fields and buttons are still readable */
+                input, select, textarea, button {
+                    background-color: #333 !important;
+                    color: #fff !important;
+                    border-color: #555 !important;
+                }
+            `;
+
+            try {
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                const style = iframeDoc.createElement('style');
+                style.textContent = darkCSS;
+                iframeDoc.head.appendChild(style);
+            } catch (e) {
+                console.warn('Could not inject CSS into iframe:', e);
+            }
+        }
+
+        // Observe newly added windows and inject CSS selectively
+        const observer = new MutationObserver(mutations => {
+            mutations.forEach(mutation => {
+                mutation.addedNodes.forEach(node => {
+                    if (node.classList && node.classList.contains('window')) {
+                        const iframe = node.querySelector('iframe');
+                        iframe.onload = () => injectSelectiveDarkModeCSS(iframe);
+                    }
+                });
+            });
+        });
+
+        // Observe dashboard container for new windows
+        observer.observe(document.getElementById('dashboard'), { childList: true });
+
+        // Initial injection for existing windows
+        document.querySelectorAll('.window-content iframe').forEach(iframe => {
+            iframe.onload = () => injectSelectiveDarkModeCSS(iframe);
+        });
+
+
+    </script>
+</body>
+</html> 
